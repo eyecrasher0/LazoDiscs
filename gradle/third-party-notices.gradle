@@ -30,7 +30,7 @@ def verifyBundledNotices = tasks.register('verifyBundledNotices') {
     if (project.hasProperty('lazoReleasePreparationTasks')) dependsOn project.lazoReleasePreparationTasks
     inputs.file(releaseArchive.flatMap { it.archiveFile })
     inputs.files(provider { shadedArchive.get().includedDependencies })
-    inputs.dir(supplementalNotices)
+    inputs.files(fileTree(supplementalNotices))
 
     doLast {
         def archiveFile = releaseArchive.get().archiveFile.get().asFile

@@ -1,0 +1,202 @@
+plugins {
+    id 'java-library'
+    id 'com.gradleup.shadow' version '9.2.2'
+}
+
+version = '1.0.7+26.3'
+group = 'com.eyecrasher'
+
+base {
+    archivesName = 'lazodiscs-paper'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    withSourcesJar()
+}
+
+repositories {
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    mavenCentral()
+    maven {
+        url = 'https://repo.plasmoverse.com/releases'
+    }
+    maven {
+        url = 'https://repo.plo.su/'
+    }
+    maven {
+        url = 'https://maven.lavalink.dev/releases'
+    }
+    maven {
+        url = 'https://maven.lavalink.dev/snapshots'
+    }
+    maven {
+        url = 'https://jitpack.io'
+    }
+}
+
+configurations {
+    shade
+    shadeRuntime
+    implementation.extendsFrom(shade)
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:26.3.build.246-stable'
+    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
+
+    compileOnly('su.plo.voice.api:server:2.1.10') {
+        exclude group: 'com.google.guava', module: 'guava'
+        exclude group: 'com.google.guava', module: 'failureaccess'
+        exclude group: 'com.google.guava', module: 'listenablefuture'
+        exclude group: 'com.google.code.findbugs', module: 'jsr305'
+        exclude group: 'org.checkerframework', module: 'checker-qual'
+        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        exclude group: 'com.google.j2objc', module: 'j2objc-annotations'
+        exclude group: 'it.unimi.dsi', module: 'fastutil'
+        exclude group: 'com.google.code.gson', module: 'gson'
+    }
+
+    // Private libraries are relocated and kept off Minecraft's compile classpath.
+    // The BOM aligns core/databind 2.21.7 with annotations 2.21.
+    shadeRuntime platform('com.fasterxml.jackson:jackson-bom:2.21.7')
+    shadeRuntime 'com.fasterxml.jackson.core:jackson-core'
+    shadeRuntime 'com.fasterxml.jackson.core:jackson-databind'
+    shadeRuntime 'com.fasterxml.jackson.core:jackson-annotations'
+    shadeRuntime('org.apache.httpcomponents:httpclient:4.5.14') {
+        exclude group: 'commons-codec', module: 'commons-codec'
+    }
+
+    // Security-patched audio transitives stay off Minecraft's compile graph.
+    shadeRuntime 'org.mozilla:rhino:1.7.15.1'
+    shadeRuntime 'org.mozilla:rhino-engine:1.7.15.1'
+    shadeRuntime 'org.json:json:20260719'
+
+    shade('dev.arbjerg:lavaplayer:2.2.7') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'commons-codec', module: 'commons-codec'
+        exclude group: 'net.java.dev.jna', module: 'jna'
+        exclude group: 'org.jetbrains', module: 'annotations'
+        exclude group: 'org.jetbrains.kotlin'
+        exclude group: 'org.jetbrains.kotlinx'
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'com.fasterxml.jackson'
+        exclude group: 'org.apache.httpcomponents'
+        exclude group: 'org.mozilla'
+        exclude group: 'org.json'
+    }
+    shade('dev.lavalink.youtube:v2:2be8e542d3f6f178e048dca565892684c2e40177-SNAPSHOT') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'commons-codec', module: 'commons-codec'
+        exclude group: 'net.java.dev.jna', module: 'jna'
+        exclude group: 'org.jetbrains', module: 'annotations'
+        exclude group: 'org.jetbrains.kotlin'
+        exclude group: 'org.jetbrains.kotlinx'
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'com.fasterxml.jackson'
+        exclude group: 'org.apache.httpcomponents'
+        exclude group: 'org.mozilla'
+        exclude group: 'org.json'
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('paper-plugin.yml') {
+        expand version: project.version
+    }
+}
+
+jar {
+    archiveClassifier.set('thin')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    configurations = [project.configurations.shade, project.configurations.shadeRuntime]
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    filesMatching('META-INF/services/**') {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+    mergeServiceFiles()
+
+    relocate 'org.apache.http', 'com.eyecrasher.lazodiscs.shadow.org.apache.http'
+    relocate 'org.apache.commons.logging', 'com.eyecrasher.lazodiscs.shadow.org.apache.commons.logging'
+    relocate 'com.fasterxml.jackson', 'com.eyecrasher.lazodiscs.shadow.com.fasterxml.jackson'
+
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+    exclude 'META-INF/MANIFEST.MF'
+    exclude 'module-info.class'
+    exclude 'META-INF/versions/**/module-info.class'
+
+    exclude 'org/slf4j/**'
+    exclude 'org/apache/commons/io/**'
+    exclude 'org/apache/commons/codec/**'
+    exclude 'com/google/gson/**'
+    exclude 'com/google/common/**'
+    exclude 'it/unimi/dsi/fastutil/**'
+    exclude 'com/sun/jna/**'
+    exclude 'javax/annotation/**'
+    exclude 'org/jetbrains/annotations/**'
+    exclude 'org/checkerframework/**'
+    exclude 'kotlin/**'
+    exclude 'kotlinx/**'
+}
+
+assemble.dependsOn shadowJar
+build.dependsOn shadowJar
+
+// Include the project's license in release, development and source archives.
+tasks.withType(Jar).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from(file('../../LICENSE'))
+}
+
+// Preserve third-party licenses/notices and verify the final release archive.
+apply from: '../../gradle/third-party-notices.gradle'
+
+// Exclude deprecated YouTube authentication and check the final archive.
+apply from: '../../gradle/audio-sources.gradle'
+
+// Share the tested resolver, Spotify matching and SoundCloud AAC implementation with the mod.
+def sharedAudio = tasks.register('sharedAudio', Sync) {
+    from('../../fabric/26.3/src/main/java') {
+        include 'com/eyecrasher/lazodiscs/voice/AudioLoadExecutor.java'
+        include 'com/eyecrasher/lazodiscs/voice/AudioResolver.java'
+        include 'com/eyecrasher/lazodiscs/voice/LavaPcmFeeder.java'
+        include 'com/eyecrasher/lazodiscs/voice/SoundCloudAacSourceManager.java'
+        include 'com/eyecrasher/lazodiscs/voice/SpotifyTitleResolver.java'
+        include 'com/eyecrasher/lazodiscs/service/**'
+        include 'com/eyecrasher/lazodiscs/data/CustomDiscData.java'
+    }
+    into layout.buildDirectory.dir('generated/sources/sharedAudio')
+}
+sourceSets.main.java.srcDir(sharedAudio)
+processResources {
+    from('../../fabric/26.3/src/main/resources') {
+        include 'lazodiscs_languages/**'
+        include 'assets/lazodiscs/textures/icons/discs.png'
+    }
+}
+// This fixture is a separate plugin and is never included in the release archive.
+sourceSets {
+    integrationTest {
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
+    }
+}
+tasks.register('integrationPlugin', Jar) {
+    dependsOn integrationTestClasses
+    archiveFileName = 'lazodiscs-paper-integration.jar'
+    from sourceSets.integrationTest.output
+}

@@ -54,6 +54,11 @@ public final class LavaPcmFeeder {
 
     private LavaPcmFeeder() {}
 
+    /** Releases loader/decoder threads when the Paper plugin is disabled. */
+    public static void shutdown() {
+        PLAYER_MANAGER.shutdown();
+    }
+
     private static AudioPlayerManager createPlayerManager(
             AudioDataFormat outputFormat, String label) {
         DefaultAudioPlayerManager manager = new DefaultAudioPlayerManager();

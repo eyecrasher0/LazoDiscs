@@ -1,0 +1,20 @@
+# Paper configuration. Changes require a server restart.
+language: en_us
+commandAlias: lazodisc
+playback:
+  defaultRange: 64
+  maxRange: 128
+  defaultVolume: 1.0
+  sourceLineDefaultVolume: 1.0
+  validationIntervalTicks: 20
+lavaplayer:
+  loadTimeoutSeconds: 60
+  spotifySearchViaYoutube: true
+  maxStreamingTrackLengthSeconds: 0
+  maxConcurrentAudioLoads: 3
+security:
+  allowHttp: false
+  allowHttps: true
+  # Empty = any domain. A listed domain also permits its subdomains.
+  # Spotify matching requires both open.spotify.com and youtube.com.
+  allowedDomains: []

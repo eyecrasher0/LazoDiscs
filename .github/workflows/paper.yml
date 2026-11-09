@@ -1,0 +1,46 @@
+name: Paper 26.3
+
+on:
+  push:
+    paths: ['paper/**', 'fabric/26.3/**', 'gradle/**', '.github/workflows/paper.yml']
+  pull_request:
+    paths: ['paper/**', 'fabric/26.3/**', 'gradle/**', '.github/workflows/paper.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        plasmo: [stable, beta]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Build and verify release archive
+        working-directory: paper/26.3
+        run: ./gradlew build integrationPlugin --console=plain
+      - name: Run disposable Paper integration server
+        working-directory: paper/26.3
+        run: python3 tools/integration.py --plasmo '${{ matrix.plasmo }}'
+      - name: Upload release JAR
+        if: success() && matrix.plasmo == 'stable'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lazodiscs-paper-26.3
+          path: paper/26.3/build/libs/lazodiscs-paper-1.0.7+26.3.jar
+      - name: Upload verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-verification-${{ matrix.plasmo }}
+          path: |
+            paper/26.3/build/integration/result-*.json
+            paper/26.3/build/integration/run-*/console.log

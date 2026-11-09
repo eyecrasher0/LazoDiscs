@@ -1,0 +1,27 @@
+name: LazoDiscs
+version: '${version}'
+main: com.eyecrasher.lazodiscs.LazoDiscs
+bootstrapper: com.eyecrasher.lazodiscs.paper.LazoDiscsBootstrap
+description: Record music links onto discs and play positional audio through Plasmo Voice.
+api-version: '26.3'
+authors: [EyeCrasher]
+website: https://github.com/eyecrasher0/LazoDiscs
+dependencies:
+  server:
+    PlasmoVoice:
+      load: BEFORE
+      required: true
+      join-classpath: true
+permissions:
+  lazodiscs.burn:
+    description: Record music onto held discs.
+    default: op
+  lazodiscs.erase:
+    description: Erase recordings from held discs.
+    default: op
+  lazodiscs.search:
+    description: Search for songs.
+    default: op
+  lazodiscs.play:
+    description: Insert recorded discs into jukeboxes.
+    default: true

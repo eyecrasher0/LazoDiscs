@@ -1,5 +1,12 @@
 # LazoDiscs Changelog
 
+## Unreleased
+
+### Added
+
+- Paper 26.3 server plugin with the existing audio engine, Bukkit command permissions, persistent disc recordings, positional Plasmo Voice playback, hopper support and cleanup on removal, chunk/world unload and plugin shutdown. See `paper/26.3/README.md` for installation, configuration and compatibility limits.
+- Reproducible integration checks on a disposable Paper server with stable and beta Plasmo Voice, plus a dedicated GitHub Actions workflow.
+
 ## [1.0.7] - 2026-10-13
 
 ### Fixed

@@ -30,6 +30,10 @@ Use `search` for a song name and `burn` for a link. Spotify support is for indiv
 
 ## Installation
 
+**Paper 26.3:** a server plugin is available in [`paper/26.3`](paper/26.3/README.md),
+with Bukkit permissions and `plugins/LazoDiscs/config.yml`. It requires Java 25 and
+the Paper build of Plasmo Voice. Players only need Plasmo Voice.
+
 - **Required:** Plasmo Voice. Fabric builds also require [Fabric API](https://modrinth.com/mod/fabric-api).
 - **Singleplayer:** install LazoDiscs and its dependencies in your Minecraft instance.
 - **Multiplayer server:** install LazoDiscs and Plasmo Voice on the server, plus Fabric API if it uses Fabric.
@@ -85,6 +89,11 @@ LazoDiscs позволяет записать свою музыку на обы�
 Для названия песни используй `search`, а для ссылки — `burn`. Поддерживаются ссылки на отдельные треки Spotify: мод получает сведения о треке и ищет подходящее аудио на YouTube Music. При записи сохраняется ссылка на выбранное аудио, чтобы повторные запуски воспроизводили тот же трек. Воспроизведение зависит от доступности подходящей записи. Для загрузки музыки серверу нужен доступ к интернету.
 
 ### Установка
+
+**Paper 26.3:** серверный плагин и инструкция — в [`paper/26.3`](paper/26.3/README.md).
+Нужны Java 25 и Paper-сборка Plasmo Voice. Настройки — в
+`plugins/LazoDiscs/config.yml`, доступ — через Bukkit-права. Игрокам нужен только
+Plasmo Voice.
 
 - **Зависимости:** Plasmo Voice для всех загрузчиков; для Fabric также нужен Fabric API.
 - **Одиночная игра:** установи LazoDiscs и зависимости в свой экземпляр Minecraft.

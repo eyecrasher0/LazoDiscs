@@ -1,0 +1,14 @@
+name: LazoDiscsIntegration
+version: '1'
+main: com.eyecrasher.lazodiscs.test.PaperIntegration
+api-version: '26.3'
+dependencies:
+  server:
+    LazoDiscs:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    PlasmoVoice:
+      load: BEFORE
+      required: true
+      join-classpath: true
