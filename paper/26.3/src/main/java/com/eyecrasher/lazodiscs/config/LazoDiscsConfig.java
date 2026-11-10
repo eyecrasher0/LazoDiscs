@@ -60,13 +60,13 @@ public final class LazoDiscsConfig {
     }
 
     private static int bounded(int n, int min, int max) {
-        return Math.clamp(n, min, max);
+        return Math.max(min, Math.min(n, max));
     }
 
     private static double bounded(double n, double min, double max) {
         if (!Double.isFinite(n))
             throw new IllegalArgumentException("Playback volume must be finite");
-        return Math.clamp(n, min, max);
+        return Math.max(min, Math.min(n, max));
     }
 
     public static final class Value<T> {

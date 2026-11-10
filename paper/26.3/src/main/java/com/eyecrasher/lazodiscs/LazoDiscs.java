@@ -8,8 +8,8 @@ import com.eyecrasher.lazodiscs.voice.AudioLoadExecutor;
 import com.eyecrasher.lazodiscs.voice.LavaPcmFeeder;
 import com.eyecrasher.lazodiscs.voice.LazoDiscsVoiceAddon;
 
-import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
-
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.IllegalPluginAccessException;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.slf4j.Logger;
@@ -25,6 +25,7 @@ public final class LazoDiscs extends JavaPlugin {
     private JukeboxPlaybackManager playback;
     private LazoDiscsCommands commands;
     private volatile boolean stopping;
+    private Command rootCommand;
 
     @Override
     public void onLoad() {
@@ -39,20 +40,28 @@ public final class LazoDiscs extends JavaPlugin {
         commands = new LazoDiscsCommands(this);
         getServer().getPluginManager().registerEvents(playback, this);
         getServer().getPluginManager().registerEvents(commands, this);
-        getLifecycleManager()
-                .registerEventHandler(
-                        LifecycleEvents.COMMANDS,
-                        event -> {
-                            String alias = LazoDiscsConfig.COMMAND_ALIAS.get();
-                            event.registrar()
-                                    .register(
-                                            alias,
-                                            "Record music discs",
-                                            alias.equals("lazodisc")
-                                                    ? List.of()
-                                                    : List.of("lazodisc"),
-                                            commands);
-                        });
+        String alias = LazoDiscsConfig.COMMAND_ALIAS.get();
+        rootCommand =
+                new Command(
+                        alias,
+                        "Record music discs",
+                        "/" + alias,
+                        alias.equals("lazodisc") ? List.of() : List.of("lazodisc")) {
+                    @Override
+                    public boolean execute(CommandSender sender, String label, String[] args) {
+                        if (stopping) return false;
+                        commands.execute(sender, args);
+                        return true;
+                    }
+
+                    @Override
+                    public List<String> tabComplete(
+                            CommandSender sender, String label, String[] args) {
+                        if (stopping) return List.of();
+                        return List.copyOf(commands.suggest(sender, args));
+                    }
+                };
+        getServer().getCommandMap().register("lazodiscs", rootCommand);
         getServer().getScheduler().runTask(this, playback::resumeLoadedChunks);
         int interval = LazoDiscsConfig.VALIDATION_INTERVAL_TICKS.get();
         getServer().getScheduler().runTaskTimer(this, playback::validate, interval, interval);
@@ -62,6 +71,18 @@ public final class LazoDiscs extends JavaPlugin {
     @Override
     public void onDisable() {
         stopping = true;
+        if (rootCommand != null) {
+            var map = getServer().getCommandMap();
+            var known = map.getKnownCommands();
+            // Paper's Brigadier-backed map supports remove(key), but not iterator.remove().
+            var aliases =
+                    known.entrySet().stream()
+                            .filter(entry -> entry.getValue() == rootCommand)
+                            .map(java.util.Map.Entry::getKey)
+                            .toList();
+            aliases.forEach(known::remove);
+            rootCommand.unregister(map);
+        }
         if (commands != null) commands.shutdown();
         if (playback != null) playback.stopAll();
         AudioLoadExecutor.shutdownNow();

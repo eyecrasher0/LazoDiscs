@@ -1,0 +1,310 @@
+{
+  "1.16.5": {
+    "build": 794,
+    "channel": "STABLE",
+    "java": 17,
+    "api": "1.16.5-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.16.5-794.jar",
+      "checksums": {
+        "sha256": "e67da4851d08cde378ab2b89be58849238c303351ed2482181a99c2c2b489276"
+      },
+      "size": 53944842,
+      "url": "https://fill-data.papermc.io/v1/objects/e67da4851d08cde378ab2b89be58849238c303351ed2482181a99c2c2b489276/paper-1.16.5-794.jar"
+    }
+  },
+  "1.17.1": {
+    "build": 411,
+    "channel": "STABLE",
+    "java": 17,
+    "api": "1.17.1-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.17.1-411.jar",
+      "checksums": {
+        "sha256": "6cc1ee2f94253ce10b5374ed85fffc735a97d8f1b64db293683dfa24dd3cc05f"
+      },
+      "size": 61886260,
+      "url": "https://fill-data.papermc.io/v1/objects/6cc1ee2f94253ce10b5374ed85fffc735a97d8f1b64db293683dfa24dd3cc05f/paper-1.17.1-411.jar"
+    }
+  },
+  "1.18.2": {
+    "build": 388,
+    "channel": "STABLE",
+    "java": 17,
+    "api": "1.18.2-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.18.2-388.jar",
+      "checksums": {
+        "sha256": "0578f18f4d632b494b468ec56b3b414b5b56fea087ee7d39cf6dcdf4c9d01f05"
+      },
+      "size": 34829667,
+      "url": "https://fill-data.papermc.io/v1/objects/0578f18f4d632b494b468ec56b3b414b5b56fea087ee7d39cf6dcdf4c9d01f05/paper-1.18.2-388.jar"
+    }
+  },
+  "1.19.2": {
+    "build": 307,
+    "channel": "STABLE",
+    "java": 17,
+    "api": "1.19.2-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.19.2-307.jar",
+      "checksums": {
+        "sha256": "2eb5c7459ec94bcdc597ed711d549a3ab4b0fda13e412a0792a1a069b5903864"
+      },
+      "size": 38319498,
+      "url": "https://fill-data.papermc.io/v1/objects/2eb5c7459ec94bcdc597ed711d549a3ab4b0fda13e412a0792a1a069b5903864/paper-1.19.2-307.jar"
+    }
+  },
+  "1.19.4": {
+    "build": 550,
+    "channel": "STABLE",
+    "java": 17,
+    "api": "1.19.4-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.19.4-550.jar",
+      "checksums": {
+        "sha256": "e587d78cba3e99ef8c4bc24cf20cc3bdbbe89e33b0b572070446af4eb6be5ccf"
+      },
+      "size": 42666406,
+      "url": "https://fill-data.papermc.io/v1/objects/e587d78cba3e99ef8c4bc24cf20cc3bdbbe89e33b0b572070446af4eb6be5ccf/paper-1.19.4-550.jar"
+    }
+  },
+  "1.20.1": {
+    "build": 196,
+    "channel": "STABLE",
+    "java": 17,
+    "api": "1.20.1-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.20.1-196.jar",
+      "checksums": {
+        "sha256": "234a9b32098100c6fc116664d64e36ccdb58b5b649af0f80bcccb08b0255eaea"
+      },
+      "size": 43230582,
+      "url": "https://fill-data.papermc.io/v1/objects/234a9b32098100c6fc116664d64e36ccdb58b5b649af0f80bcccb08b0255eaea/paper-1.20.1-196.jar"
+    }
+  },
+  "1.20.4": {
+    "build": 499,
+    "channel": "STABLE",
+    "java": 17,
+    "api": "1.20.4-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.20.4-499.jar",
+      "checksums": {
+        "sha256": "cabed3ae77cf55deba7c7d8722bc9cfd5e991201c211665f9265616d9fe5c77b"
+      },
+      "size": 42781488,
+      "url": "https://fill-data.papermc.io/v1/objects/cabed3ae77cf55deba7c7d8722bc9cfd5e991201c211665f9265616d9fe5c77b/paper-1.20.4-499.jar"
+    }
+  },
+  "1.21": {
+    "build": 130,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21-130.jar",
+      "checksums": {
+        "sha256": "ab9bb1afc3cea6978a0c03ce8448aa654fe8a9c4dddf341e7cbda1b0edaa73f5"
+      },
+      "size": 49049109,
+      "url": "https://fill-data.papermc.io/v1/objects/ab9bb1afc3cea6978a0c03ce8448aa654fe8a9c4dddf341e7cbda1b0edaa73f5/paper-1.21-130.jar"
+    }
+  },
+  "1.21.1": {
+    "build": 133,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21.1-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.1-133.jar",
+      "checksums": {
+        "sha256": "39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9"
+      },
+      "size": 49394394,
+      "url": "https://fill-data.papermc.io/v1/objects/39bd8c00b9e18de91dcabd3cc3dcfa5328685a53b7187a2f63280c22e2d287b9/paper-1.21.1-133.jar"
+    }
+  },
+  "1.21.3": {
+    "build": 83,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21.3-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.3-83.jar",
+      "checksums": {
+        "sha256": "87e973e1d338e869e7fdbc4b8fadc1579d7bb0246a0e0cf6e5700ace6c8bc17e"
+      },
+      "size": 50931273,
+      "url": "https://fill-data.papermc.io/v1/objects/87e973e1d338e869e7fdbc4b8fadc1579d7bb0246a0e0cf6e5700ace6c8bc17e/paper-1.21.3-83.jar"
+    }
+  },
+  "1.21.4": {
+    "build": 232,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21.4-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.4-232.jar",
+      "checksums": {
+        "sha256": "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc"
+      },
+      "size": 51437498,
+      "url": "https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar"
+    }
+  },
+  "1.21.5": {
+    "build": 114,
+    "channel": "ALPHA",
+    "java": 21,
+    "api": "1.21.5-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.5-114.jar",
+      "checksums": {
+        "sha256": "2ae6ae22adf417699746e0f89fc2ef6cb6ee050a5f6608cee58f0535d60b509e"
+      },
+      "size": 51427274,
+      "url": "https://fill-data.papermc.io/v1/objects/2ae6ae22adf417699746e0f89fc2ef6cb6ee050a5f6608cee58f0535d60b509e/paper-1.21.5-114.jar"
+    }
+  },
+  "1.21.6": {
+    "build": 48,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21.6-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.6-48.jar",
+      "checksums": {
+        "sha256": "35e2dfa66b3491b9d2f0bb033679fa5aca1e1fdf097e7a06a80ce8afeda5c214"
+      },
+      "size": 52639704,
+      "url": "https://fill-data.papermc.io/v1/objects/35e2dfa66b3491b9d2f0bb033679fa5aca1e1fdf097e7a06a80ce8afeda5c214/paper-1.21.6-48.jar"
+    }
+  },
+  "1.21.7": {
+    "build": 32,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21.7-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.7-32.jar",
+      "checksums": {
+        "sha256": "83838188699cb2837e55b890fb1a1d39ad0710285ed633fbf9fc14e9f47ce078"
+      },
+      "size": 52771702,
+      "url": "https://fill-data.papermc.io/v1/objects/83838188699cb2837e55b890fb1a1d39ad0710285ed633fbf9fc14e9f47ce078/paper-1.21.7-32.jar"
+    }
+  },
+  "1.21.8": {
+    "build": 60,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21.8-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.8-60.jar",
+      "checksums": {
+        "sha256": "8de7c52c3b02403503d16fac58003f1efef7dd7a0256786843927fa92ee57f1e"
+      },
+      "size": 52811717,
+      "url": "https://fill-data.papermc.io/v1/objects/8de7c52c3b02403503d16fac58003f1efef7dd7a0256786843927fa92ee57f1e/paper-1.21.8-60.jar"
+    }
+  },
+  "1.21.9": {
+    "build": 59,
+    "channel": "ALPHA",
+    "java": 21,
+    "api": "1.21.9-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.9-59.jar",
+      "checksums": {
+        "sha256": "aec002e77c7566e49494fdf05430b96078ffd1d7430e652d4f338fef951e7a10"
+      },
+      "size": 53440323,
+      "url": "https://fill-data.papermc.io/v1/objects/aec002e77c7566e49494fdf05430b96078ffd1d7430e652d4f338fef951e7a10/paper-1.21.9-59.jar"
+    }
+  },
+  "1.21.10": {
+    "build": 130,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21.10-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.10-130.jar",
+      "checksums": {
+        "sha256": "158703f75a26f842ea656b3dc6d75bf3d1ec176b97a2c36384d0b80b3871af53"
+      },
+      "size": 54475623,
+      "url": "https://fill-data.papermc.io/v1/objects/158703f75a26f842ea656b3dc6d75bf3d1ec176b97a2c36384d0b80b3871af53/paper-1.21.10-130.jar"
+    }
+  },
+  "1.21.11": {
+    "build": 132,
+    "channel": "STABLE",
+    "java": 21,
+    "api": "1.21.11-R0.1-SNAPSHOT",
+    "download": {
+      "name": "paper-1.21.11-132.jar",
+      "checksums": {
+        "sha256": "5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba"
+      },
+      "size": 54846016,
+      "url": "https://fill-data.papermc.io/v1/objects/5ffef465eeeb5f2a3c23a24419d97c51afd7dbb4923ff42df9a3f58bba1ccfba/paper-1.21.11-132.jar"
+    }
+  },
+  "26.1.1": {
+    "build": 29,
+    "channel": "ALPHA",
+    "java": 25,
+    "api": "26.1.1.build.29-alpha",
+    "download": {
+      "name": "paper-26.1.1-29.jar",
+      "checksums": {
+        "sha256": "43d08ed52c7af4e9f72769122501a5c15f99c7ace0c428a3eef040fd3f6fdbc5"
+      },
+      "size": 52896049,
+      "url": "https://fill-data.papermc.io/v1/objects/43d08ed52c7af4e9f72769122501a5c15f99c7ace0c428a3eef040fd3f6fdbc5/paper-26.1.1-29.jar"
+    }
+  },
+  "26.1.2": {
+    "build": 74,
+    "channel": "STABLE",
+    "java": 25,
+    "api": "26.1.2.build.74-stable",
+    "download": {
+      "name": "paper-26.1.2-74.jar",
+      "checksums": {
+        "sha256": "1d70b1dab9cf4a6de615209a536f3a45a2186240253c428213ce2188ab95e5f7"
+      },
+      "size": 52893229,
+      "url": "https://fill-data.papermc.io/v1/objects/1d70b1dab9cf4a6de615209a536f3a45a2186240253c428213ce2188ab95e5f7/paper-26.1.2-74.jar"
+    }
+  },
+  "26.2": {
+    "build": 135,
+    "channel": "STABLE",
+    "java": 25,
+    "api": "26.2.build.135-stable",
+    "download": {
+      "name": "paper-26.2-135.jar",
+      "checksums": {
+        "sha256": "ef3dbc68b013deafdbbee3bebf1ba351671ebcda94a8f136809b7532d5ba2fe1"
+      },
+      "size": 64525370,
+      "url": "https://fill-data.papermc.io/v1/objects/ef3dbc68b013deafdbbee3bebf1ba351671ebcda94a8f136809b7532d5ba2fe1/paper-26.2-135.jar"
+    }
+  },
+  "26.3": {
+    "build": 248,
+    "channel": "STABLE",
+    "java": 25,
+    "api": "26.3.build.248-stable",
+    "download": {
+      "name": "paper-26.3-248.jar",
+      "checksums": {
+        "sha256": "352dbbf965946456a81305f4c4a8d39cb7a8e55a0b0126b417a24efd944b92c2"
+      },
+      "size": 55281327,
+      "url": "https://fill-data.papermc.io/v1/objects/352dbbf965946456a81305f4c4a8d39cb7a8e55a0b0126b417a24efd944b92c2/paper-26.3-248.jar"
+    }
+  }
+}

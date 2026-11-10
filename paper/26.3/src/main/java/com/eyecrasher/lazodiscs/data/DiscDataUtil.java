@@ -4,16 +4,10 @@ import com.eyecrasher.lazodiscs.config.LazoDiscsConfig;
 import com.eyecrasher.lazodiscs.text.LazoDiscsText;
 import com.eyecrasher.lazodiscs.voice.SpotifyTitleResolver;
 
-import io.papermc.paper.datacomponent.DataComponentTypes;
-import io.papermc.paper.datacomponent.item.JukeboxPlayable;
-import io.papermc.paper.registry.RegistryAccess;
-import io.papermc.paper.registry.RegistryKey;
-
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 
-import org.bukkit.JukeboxSong;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -43,13 +37,15 @@ public final class DiscDataUtil {
     }
 
     public static boolean isMusicDisc(ItemStack item) {
-        return item != null && !item.isEmpty() && item.hasData(DataComponentTypes.JUKEBOX_PLAYABLE);
+        return DiscSongs.isMusicDisc(item);
     }
 
     public static Optional<CustomDiscData> read(ItemStack item) {
         if (!isMusicDisc(item)) return Optional.empty();
         PersistentDataContainer data =
-                item.getPersistentDataContainer().get(ROOT, PersistentDataType.TAG_CONTAINER);
+                item.getItemMeta()
+                        .getPersistentDataContainer()
+                        .get(ROOT, PersistentDataType.TAG_CONTAINER);
         if (data == null) return Optional.empty();
         try {
             String url = data.get(URL, PersistentDataType.STRING);
@@ -70,7 +66,7 @@ public final class DiscDataUtil {
                             url,
                             title,
                             clampRange(range),
-                            Math.clamp(volume, 0, 4),
+                            Math.max(0, Math.min(volume, 4)),
                             UUID.fromString(id)));
         } catch (IllegalArgumentException | NullPointerException malformed) {
             return Optional.empty();
@@ -84,10 +80,11 @@ public final class DiscDataUtil {
         ItemMeta meta = item.getItemMeta();
         PersistentDataContainer pdc = meta.getPersistentDataContainer();
         PersistentDataContainer data = pdc.get(ROOT, PersistentDataType.TAG_CONTAINER);
-        JukeboxSong original = item.getData(DataComponentTypes.JUKEBOX_PLAYABLE).jukeboxSong();
+        String original = DiscSongs.songKey(item);
+        int comparator = comparatorOutput(item);
         if (data == null) {
             data = pdc.getAdapterContext().newPersistentDataContainer();
-            data.set(SONG, PersistentDataType.STRING, original.getKey().toString());
+            if (original != null) data.set(SONG, PersistentDataType.STRING, original);
             Component name = meta.displayName();
             if (name != null)
                 data.set(
@@ -98,15 +95,12 @@ public final class DiscDataUtil {
         data.set(URL, PersistentDataType.STRING, validateUrl(disc.url()));
         data.set(TITLE, PersistentDataType.STRING, sanitizeTitle(disc.title()));
         data.set(RANGE, PersistentDataType.INTEGER, clampRange(disc.range()));
-        data.set(VOLUME, PersistentDataType.FLOAT, Math.clamp(disc.volume(), 0, 4));
+        data.set(VOLUME, PersistentDataType.FLOAT, Math.max(0, Math.min(disc.volume(), 4)));
         data.set(ID, PersistentDataType.STRING, disc.id().toString());
         pdc.set(ROOT, PersistentDataType.TAG_CONTAINER, data);
         meta.displayName(Component.text(sanitizeTitle(disc.title()), NamedTextColor.AQUA));
         item.setItemMeta(meta);
-        JukeboxSong silent = song("lazodiscs:recording_" + original.getComparatorOutput());
-        if (silent == null)
-            throw new IllegalStateException("LazoDiscs song registry is unavailable");
-        item.setData(DataComponentTypes.JUKEBOX_PLAYABLE, JukeboxPlayable.jukeboxPlayable(silent));
+        DiscSongs.record(item, comparator);
     }
 
     public static void clear(ItemStack item) {
@@ -121,18 +115,11 @@ public final class DiscDataUtil {
                         : GsonComponentSerializer.gson().deserialize(originalName));
         meta.getPersistentDataContainer().remove(ROOT);
         item.setItemMeta(meta);
-        JukeboxSong original = song(data.getOrDefault(SONG, PersistentDataType.STRING, ""));
-        if (original == null) item.resetData(DataComponentTypes.JUKEBOX_PLAYABLE);
-        else
-            item.setData(
-                    DataComponentTypes.JUKEBOX_PLAYABLE, JukeboxPlayable.jukeboxPlayable(original));
+        DiscSongs.restore(item, data.getOrDefault(SONG, PersistentDataType.STRING, ""));
     }
 
-    private static JukeboxSong song(String name) {
-        NamespacedKey key = NamespacedKey.fromString(name);
-        return key == null
-                ? null
-                : RegistryAccess.registryAccess().getRegistry(RegistryKey.JUKEBOX_SONG).get(key);
+    public static int comparatorOutput(ItemStack item) {
+        return DiscSongs.comparatorOutput(item);
     }
 
     public static String validateUrl(String raw) {
@@ -184,7 +171,7 @@ public final class DiscDataUtil {
     }
 
     public static int clampRange(int range) {
-        return Math.clamp(range, 1, LazoDiscsConfig.MAX_RANGE.get());
+        return Math.max(1, Math.min(range, LazoDiscsConfig.MAX_RANGE.get()));
     }
 
     public static String sanitizeTitle(String title) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the integration fixture on a disposable, loopback-only Paper 26.3 server."""
+"""Run the integration fixture on a disposable, loopback-only Paper server."""
 
 import argparse
 import hashlib
@@ -20,8 +20,7 @@ import urllib.request
 import wave
 
 MODULE = Path(__file__).resolve().parents[1]
-PAPER_HASH = "d158542561e440c4026be7ccb32f551ee88313864792f38ea0ce5d1b88f1b27c"
-PAPER_URL = f"https://fill-data.papermc.io/v1/objects/{PAPER_HASH}/paper-26.3-246.jar"
+TARGETS = json.loads((MODULE.parent / 'targets.json').read_text())
 PV = {
     "stable": (
         "https://cdn.modrinth.com/data/1bZhdhsH/versions/DySKquus/PlasmoVoice-Paper-2.1.17.jar",
@@ -60,6 +59,9 @@ class AudioFixture(http.server.BaseHTTPRequestHandler):
     audio = wav_fixture()
 
     def do_GET(self):
+        if self.path == "/missing.wav":
+            # Keep the loading state observable even when a local 404 is extremely fast.
+            time.sleep(0.5)
         if self.path == "/slow.wav":
             time.sleep(4)
         if self.path == "/stall.wav":
@@ -82,17 +84,19 @@ class AudioFixture(http.server.BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--minecraft", choices=TARGETS, default="26.3")
     parser.add_argument("--java", default=str(Path(os.environ["JAVA_HOME"]) / "bin/java") if "JAVA_HOME" in os.environ else "java")
-    parser.add_argument("--work-dir", type=Path, default=MODULE / "build/integration")
+    parser.add_argument("--work-dir", type=Path, default=None)
     parser.add_argument("--plasmo", choices=PV, default="stable")
     args = parser.parse_args()
-    cache = args.work_dir.resolve()
+    target = TARGETS[args.minecraft]
+    cache = (args.work_dir or MODULE / "build" / args.minecraft / "integration").resolve()
     cache.mkdir(parents=True, exist_ok=True)
-    download(PAPER_URL, cache / "paper.jar", "sha256", PAPER_HASH)
+    download(target["download"]["url"], cache / "paper.jar", "sha256", target["download"]["checksums"]["sha256"])
     url, digest = PV[args.plasmo]
     download(url, cache / f"pv-{args.plasmo}.jar", "sha512", digest)
-    release = MODULE / "build/libs/lazodiscs-paper-1.0.7+26.3.jar"
-    fixture = MODULE / "build/libs/lazodiscs-paper-integration.jar"
+    release = MODULE / f"build/{args.minecraft}/libs/lazodiscs-paper-1.0.7+{args.minecraft}.jar"
+    fixture = MODULE / f"build/{args.minecraft}/libs/lazodiscs-paper-integration.jar"
     if not release.is_file() or not fixture.is_file():
         raise RuntimeError("Run ./gradlew build integrationPlugin first")
     run = Path(tempfile.mkdtemp(prefix=f"run-{args.plasmo}-", dir=cache))
@@ -101,6 +105,7 @@ def main():
     (plugins / "PlasmoVoice").mkdir()
     for source, name in ((release, "LazoDiscs.jar"), (fixture, "LazoDiscsIntegration.jar"), (cache / f"pv-{args.plasmo}.jar", "PlasmoVoice.jar")):
         shutil.copy2(source, plugins / name)
+    tested_hash = hashlib.sha256((plugins / "LazoDiscs.jar").read_bytes()).hexdigest()
     shutil.copy2(cache / "paper.jar", run / "paper.jar")
     # Reuse Paper's downloaded vanilla server and libraries, never its worlds/configuration.
     for name in ("cache", "libraries", "versions"):
@@ -123,10 +128,10 @@ def main():
     http_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), AudioFixture)
     threading.Thread(target=http_server.serve_forever, daemon=True).start()
     result = run / "result.json"
-    command = [args.java, "-Xms512M", "-Xmx1536M", "-Dterminal.jline=false", "-Dterminal.ansi=false",
+    command = [args.java, "-DPaper.IgnoreJavaVersion=true", "-Xms512M", "-Xmx1536M", "-Dterminal.jline=false", "-Dterminal.ansi=false",
                f"-Dlazodiscs.testAudioUrl=http://127.0.0.1:{http_server.server_port}/test.wav",
                f"-Dlazodiscs.testResult={result}", "-jar", "paper.jar", "--nogui"]
-    print(f"Running Paper 26.3 + Plasmo {args.plasmo}; log: {run / 'console.log'}", flush=True)
+    print(f"Running Paper {args.minecraft} + Plasmo {args.plasmo}; log: {run / 'console.log'}", flush=True)
     try:
         with (run / "console.log").open("w") as log:
             server = subprocess.Popen(command, cwd=run, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
@@ -146,7 +151,9 @@ def main():
         if code != 0 or not result.exists():
             raise RuntimeError(f"Paper exited {code} without a test result; inspect {run / 'console.log'}")
         report = json.loads(result.read_text())
-        report.update(paper="26.3-246", plasmo=args.plasmo, log=str(run / "console.log"), jar_sha256=hashlib.sha256(release.read_bytes()).hexdigest())
+        if hashlib.sha256(release.read_bytes()).hexdigest() != tested_hash:
+            raise RuntimeError("Release JAR changed while its copied test instance was running")
+        report.update(paper=f"{args.minecraft}-{target['build']}", plasmo=args.plasmo, log=str(run / "console.log"), jar_sha256=tested_hash)
         (cache / f"result-{args.plasmo}.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))
         if report["failure"] is not None:

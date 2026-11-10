@@ -10,9 +10,6 @@ import com.eyecrasher.lazodiscs.voice.LavaPcmFeeder;
 import com.eyecrasher.lazodiscs.voice.LazoDiscsVoiceAddon;
 import com.eyecrasher.lazodiscs.voice.SpotifyTitleResolver;
 
-import io.papermc.paper.command.brigadier.BasicCommand;
-import io.papermc.paper.command.brigadier.CommandSourceStack;
-
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -40,7 +37,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Future;
 
-public final class LazoDiscsCommands implements BasicCommand, Listener {
+public final class LazoDiscsCommands implements Listener {
     private static final List<String> ACTIONS = List.of("burn", "erase", "search");
     private final LazoDiscs plugin;
     private final Map<UUID, Pending> pending = new HashMap<>();
@@ -49,9 +46,7 @@ public final class LazoDiscsCommands implements BasicCommand, Listener {
         this.plugin = plugin;
     }
 
-    @Override
-    public void execute(CommandSourceStack source, String[] args) {
-        CommandSender sender = source.getSender();
+    public void execute(CommandSender sender, String[] args) {
         if (args.length == 0 || !ACTIONS.contains(args[0].toLowerCase(Locale.ROOT))) {
             sender.sendMessage(
                     Component.text(
@@ -82,20 +77,15 @@ public final class LazoDiscsCommands implements BasicCommand, Listener {
         else search(player, String.join(" ", Arrays.copyOfRange(args, 1, args.length)));
     }
 
-    @Override
     public boolean canUse(CommandSender sender) {
         return ACTIONS.stream().anyMatch(action -> sender.hasPermission("lazodiscs." + action));
     }
 
-    @Override
-    public Collection<String> suggest(CommandSourceStack source, String[] args) {
+    public Collection<String> suggest(CommandSender sender, String[] args) {
         if (args.length > 1) return List.of();
         String prefix = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
         return ACTIONS.stream()
-                .filter(
-                        a ->
-                                a.startsWith(prefix)
-                                        && source.getSender().hasPermission("lazodiscs." + a))
+                .filter(a -> a.startsWith(prefix) && sender.hasPermission("lazodiscs." + a))
                 .toList();
     }
 

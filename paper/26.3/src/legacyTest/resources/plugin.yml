@@ -1,0 +1,5 @@
+name: LazoDiscsIntegration
+version: '1'
+main: com.eyecrasher.lazodiscs.test.PaperIntegration
+api-version: '${apiVersion}'
+depend: [LazoDiscs, PlasmoVoice]

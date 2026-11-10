@@ -8,8 +8,6 @@ import com.eyecrasher.lazodiscs.voice.LavaPcmFeeder;
 import com.eyecrasher.lazodiscs.voice.LazoDiscsVoiceAddon;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackState;
 
-import io.papermc.paper.datacomponent.DataComponentTypes;
-
 import net.kyori.adventure.text.Component;
 
 import org.bukkit.Bukkit;
@@ -86,7 +84,63 @@ public final class PaperIntegration extends JavaPlugin {
                 "source resolves the exact Bukkit world");
         source.stop();
         check(sourceCount() == 0, "unused source removed");
-        decodeAudio();
+        world.setChunkForceLoaded(12, 0, true);
+        later(2, () -> compareRedstone(0));
+    }
+
+    private void compareRedstone(int index) {
+        var types =
+                java.util.Arrays.stream(Material.values())
+                        .filter(
+                                t ->
+                                        t.name().startsWith("MUSIC_DISC_")
+                                                && t.isItem()
+                                                && DiscDataUtil.isMusicDisc(new ItemStack(t)))
+                        .toList();
+        if (index == types.size()) {
+            decodeAudio();
+            return;
+        }
+        Material type = types.get(index);
+        ItemStack plain = new ItemStack(type);
+        ItemStack burned = plain.clone();
+        DiscDataUtil.write(burned, disc(audio));
+        comparatorFixture(0, plain);
+        comparatorFixture(4, burned);
+        later(
+                6,
+                () -> {
+                    int original =
+                            ((org.bukkit.block.data.type.RedstoneWire)
+                                            world.getBlockAt(202, 80, 0).getBlockData())
+                                    .getPower();
+                    int custom =
+                            ((org.bukkit.block.data.type.RedstoneWire)
+                                            world.getBlockAt(202, 80, 4).getBlockData())
+                                    .getPower();
+                    check(
+                            original > 0 && original == custom,
+                            "native comparator redstone retained for "
+                                    + type
+                                    + " ("
+                                    + original
+                                    + ")");
+                    compareRedstone(index + 1);
+                });
+    }
+
+    private void comparatorFixture(int z, ItemStack item) {
+        for (int x = 200; x <= 202; x++) world.getBlockAt(x, 79, z).setType(Material.STONE);
+        world.getBlockAt(200, 80, z).setType(Material.JUKEBOX);
+        world.getBlockAt(201, 80, z).setType(Material.COMPARATOR);
+        var comparator =
+                (org.bukkit.block.data.type.Comparator) world.getBlockAt(201, 80, z).getBlockData();
+        comparator.setFacing(org.bukkit.block.BlockFace.WEST);
+        world.getBlockAt(201, 80, z).setBlockData(comparator);
+        world.getBlockAt(202, 80, z).setType(Material.REDSTONE_WIRE);
+        var jukebox = (Jukebox) world.getBlockAt(200, 80, z).getState();
+        jukebox.setRecord(item);
+        jukebox.update();
     }
 
     private void itemRoundTrips() {
@@ -107,18 +161,10 @@ public final class PaperIntegration extends JavaPlugin {
                     });
             ItemStack burned = original.clone();
             var expected = disc(audio);
-            int comparator =
-                    original.getData(DataComponentTypes.JUKEBOX_PLAYABLE)
-                            .jukeboxSong()
-                            .getComparatorOutput();
+            int comparator = DiscDataUtil.comparatorOutput(original);
             DiscDataUtil.write(burned, expected);
             check(DiscDataUtil.read(burned).orElseThrow().equals(expected), "record/read " + type);
-            check(
-                    burned.getData(DataComponentTypes.JUKEBOX_PLAYABLE)
-                                    .jukeboxSong()
-                                    .getComparatorOutput()
-                            == comparator,
-                    "comparator " + type);
+            check(DiscDataUtil.comparatorOutput(burned) == comparator, "comparator " + type);
             ItemStack restored = ItemStack.deserializeBytes(burned.serializeAsBytes());
             check(
                     DiscDataUtil.read(restored).orElseThrow().equals(expected),
@@ -198,7 +244,7 @@ public final class PaperIntegration extends JavaPlugin {
                                                     check(
                                                             decoded >= 145,
                                                             "real HTTP WAV decoded and encoded to"
-                                                                + " Opus ("
+                                                                    + " Opus ("
                                                                     + decoded
                                                                     + " frames)");
                                                     hopperPlayback();
@@ -365,6 +411,9 @@ public final class PaperIntegration extends JavaPlugin {
                     check(
                             activeCount() == 0 && line.getSources().isEmpty(),
                             "plugin disable releases all audio sources");
+                    check(
+                            getServer().getCommandMap().getCommand("lazodisc") == null,
+                            "disable unregisters command aliases");
                     check(
                             ((Map<?, ?>) field(field(plugin, "commands"), "pending")).isEmpty(),
                             "plugin disable clears pending commands");

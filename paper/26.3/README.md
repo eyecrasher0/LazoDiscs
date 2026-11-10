@@ -1,4 +1,6 @@
-# LazoDiscs for Paper 26.3
+# LazoDiscs for Paper — detailed guide
+
+For all 22 versions and legacy behavior differences, see [Paper compatibility](../README.md).
 
 [English](#installation) · [Русский](#установка)
 
@@ -9,14 +11,14 @@ recording, whose URL is saved on the disc.
 
 ## Installation
 
-1. Run **Paper 26.3 on Java 25**.
+1. Run a [supported Paper version](../README.md#supported-targets) on its required Java version.
 2. Install the Paper build of [Plasmo Voice](https://modrinth.com/plugin/plasmo-voice).
-3. Put `lazodiscs-paper-1.0.7+26.3.jar` in `plugins/` and restart the server.
+3. Put `lazodiscs-paper-1.0.7+<minecraft>.jar` in `plugins/` and restart the server.
 4. Players need the Plasmo Voice client mod to hear music. No LazoDiscs client mod
    or resource pack is needed. Configure Plasmo Voice's UDP connection as usual.
 
 Use the shaded release JAR; `-thin`, `-sources`, and `-integration` JARs are not
-server releases. This module targets Paper, not Spigot or Folia.
+server releases. This module targets Paper; Spigot and Folia have not been verified.
 
 Hold **one** vanilla music disc in your main hand:
 
@@ -33,11 +35,11 @@ Each player can have one pending burn/search. Network work runs off the server
 thread with a bounded queue; player/item state and permissions are checked again
 before writing the recording.
 
-Hoppers insert recorded discs and extract them after playback ends. Ejecting,
+On 1.19.4+, hoppers insert recorded discs and extract them after playback ends. Ejecting,
 breaking or exploding a jukebox, unloading its chunk/world, or disabling the
 plugin stops its audio. Recorded discs in reloaded chunks start from the beginning.
 Original comparator strength, unrelated item data and lore are preserved.
-The vanilla song is replaced by a silent registry entry while the disc is recorded.
+On 1.21.4+, the vanilla song is replaced by a silent registry entry while the disc is recorded. See the compatibility guide for legacy behavior.
 
 ## Configuration
 
@@ -67,7 +69,7 @@ Aeronautics integration belong to the mod builds and are not part of this plugin
 
 ## Build and verify
 
-From this directory, with `JAVA_HOME` pointing to a JDK 25:
+From this directory, with `JAVA_HOME` pointing to a JDK 25 (the default target is 26.3):
 
 ```sh
 ./gradlew build integrationPlugin
@@ -80,7 +82,7 @@ SoundCloud AAC sources, while using Paper adapters for commands, item data,
 configuration, jukebox events and Plasmo world/source lifecycle. No Minecraft
 internals or packet interception are used by the plugin.
 
-The integration runner downloads hash-pinned Paper **26.3 build 246** and Plasmo
+The integration runner downloads hash-pinned Paper builds from `../targets.json` and Plasmo
 Voice **2.1.17** (or **2.2.0-beta.3**), accepts the Minecraft EULA for the disposable
 test instance, binds Minecraft/voice/fixture HTTP to loopback, generates its own
 WAV, and stops the server when done. Run it only if you agree to the
@@ -91,15 +93,14 @@ natural completion, ejection during a delayed load, chunk unloading, load failur
 and cancelled inventory events. It does not replace a listening test with a
 Plasmo Voice client or guarantee availability of external music services.
 
-Verified on 2026-11-10: a clean build, all archive checks, and **128 integration
-assertions per Plasmo Voice version** passed on Paper 26.3 build 246 with Java 25.
-This also covered actual world unloading and plugin shutdown with active loads:
-all sources were removed, pending commands cleared, and loader workers stopped.
+The automated matrix runs real Paper servers for each advertised target. It checks
+actual world unloading and plugin shutdown with active loads: sources must be
+removed, pending commands cleared, aliases unregistered and loader workers stopped.
 
 ## Установка
 
-Нужны **Paper 26.3, Java 25** и серверный плагин **Plasmo Voice**.
-Положи `lazodiscs-paper-1.0.7+26.3.jar` в `plugins/` и перезапусти сервер.
+Нужны [поддерживаемые Paper и Java](../README.md) и серверный плагин **Plasmo Voice**.
+Положи `lazodiscs-paper-1.0.7+<minecraft>.jar` в `plugins/` и перезапусти сервер.
 Игрокам нужен клиентский Plasmo Voice; LazoDiscs на клиенте и ресурспак не требуются.
 
 Возьми одну обычную пластинку в основную руку:

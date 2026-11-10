@@ -1,11 +1,14 @@
 # LazoDiscs Changelog
 
-## Unreleased
+## [1.0.7 Paper] - 2026-11-10
 
 ### Added
 
-- Paper 26.3 server plugin with the existing audio engine, Bukkit command permissions, persistent disc recordings, positional Plasmo Voice playback, hopper support and cleanup on removal, chunk/world unload and plugin shutdown. See `paper/26.3/README.md` for installation, configuration and compatibility limits.
-- Reproducible integration checks on a disposable Paper server with stable and beta Plasmo Voice, plus a dedicated GitHub Actions workflow.
+- First Paper plugin release: 22 exact server targets from 1.16.5 through 26.3, matching available Paper builds in stable Plasmo Voice 2.1.17's compatibility list. The existing mod builds are unchanged.
+- Burn, search and erase commands with Bukkit permissions, persistent item recordings, configurable language and playback settings, and positional Plasmo Voice audio using the existing 1.0.7 audio engine.
+- Version-specific jukebox adapters: legacy PDC items through 1.21.3, silent datapack songs from 1.21.4 through 26.2, and registry songs on 26.3. Native hopper insertion/extraction is supported where the game provides jukebox inventories (1.19.4+).
+- Isolated, relocated audio libraries for old Paper servers, cancellation of pending playback on ejection/unload, protection checks, and cleanup of sources, workers and commands at shutdown.
+- Hash-pinned disposable-server integration checks and a GitHub Actions compatibility matrix. See `paper/README.md` for requirements and legacy behavior differences.
 
 ## [1.0.7] - 2026-10-13
 

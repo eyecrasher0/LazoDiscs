@@ -30,9 +30,10 @@ Use `search` for a song name and `burn` for a link. Spotify support is for indiv
 
 ## Installation
 
-**Paper 26.3:** a server plugin is available in [`paper/26.3`](paper/26.3/README.md),
-with Bukkit permissions and `plugins/LazoDiscs/config.yml`. It requires Java 25 and
-the Paper build of Plasmo Voice. Players only need Plasmo Voice.
+**Paper:** server plugins are available for **22 Paper versions, from 1.16.5 to 26.3**.
+See the [Paper compatibility table and installation guide](paper/README.md).
+They use Bukkit permissions and `plugins/LazoDiscs/config.yml`; players only need
+Plasmo Voice. Install the file for your exact server version.
 
 - **Required:** Plasmo Voice. Fabric builds also require [Fabric API](https://modrinth.com/mod/fabric-api).
 - **Singleplayer:** install LazoDiscs and its dependencies in your Minecraft instance.
@@ -90,10 +91,10 @@ LazoDiscs позволяет записать свою музыку на обы�
 
 ### Установка
 
-**Paper 26.3:** серверный плагин и инструкция — в [`paper/26.3`](paper/26.3/README.md).
-Нужны Java 25 и Paper-сборка Plasmo Voice. Настройки — в
-`plugins/LazoDiscs/config.yml`, доступ — через Bukkit-права. Игрокам нужен только
-Plasmo Voice.
+**Paper:** доступны серверные плагины для **22 версий Paper, от 1.16.5 до 26.3**.
+[Совместимость и установка](paper/README.md). Скачай файл для точной версии сервера.
+Настройки — в `plugins/LazoDiscs/config.yml`, доступ — через Bukkit-права.
+Игрокам нужен только Plasmo Voice.
 
 - **Зависимости:** Plasmo Voice для всех загрузчиков; для Fabric также нужен Fabric API.
 - **Одиночная игра:** установи LazoDiscs и зависимости в свой экземпляр Minecraft.

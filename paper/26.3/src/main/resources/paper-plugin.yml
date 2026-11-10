@@ -3,7 +3,7 @@ version: '${version}'
 main: com.eyecrasher.lazodiscs.LazoDiscs
 bootstrapper: com.eyecrasher.lazodiscs.paper.LazoDiscsBootstrap
 description: Record music links onto discs and play positional audio through Plasmo Voice.
-api-version: '26.3'
+api-version: '${apiVersion}'
 authors: [EyeCrasher]
 website: https://github.com/eyecrasher0/LazoDiscs
 dependencies:

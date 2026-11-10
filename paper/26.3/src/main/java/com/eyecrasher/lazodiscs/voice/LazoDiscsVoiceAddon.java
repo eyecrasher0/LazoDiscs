@@ -34,7 +34,7 @@ import java.util.function.Consumer;
 @Addon(
         id = "lazodiscs",
         name = "LazoDiscs",
-        version = "1.0.7+26.3",
+        version = "1.0.7",
         authors = {"EyeCrasher"})
 public final class LazoDiscsVoiceAddon implements AddonInitializer {
     private final LazoDiscs plugin;

@@ -3,7 +3,17 @@ plugins {
     id 'com.gradleup.shadow' version '9.2.2'
 }
 
-version = '1.0.7+26.3'
+def minecraftTarget = providers.gradleProperty('minecraftTarget').getOrElse('26.3')
+def legacyTarget = !minecraftTarget.startsWith('26.') && (
+    !minecraftTarget.startsWith('1.21') || minecraftTarget in ['1.21', '1.21.1', '1.21.3'])
+def javaTarget = minecraftTarget.startsWith('26.') ? 25 : (legacyTarget && !minecraftTarget.startsWith('1.21') ? 17 : 21)
+def useSongDatapack = !legacyTarget && minecraftTarget != '26.3'
+def descriptorApi = javaTarget == 17 ? minecraftTarget.split('\\.')[0..1].join('.') : minecraftTarget
+def targets = new groovy.json.JsonSlurper().parse(file('../targets.json'))
+if (!targets.containsKey(minecraftTarget)) throw new GradleException("Unsupported Paper target: ${minecraftTarget}")
+def paperApi = targets[minecraftTarget].api
+version = "1.0.7+${minecraftTarget}"
+layout.buildDirectory = layout.projectDirectory.dir("build/${minecraftTarget}")
 group = 'com.eyecrasher'
 
 base {
@@ -42,7 +52,7 @@ configurations {
 }
 
 dependencies {
-    compileOnly 'io.papermc.paper:paper-api:26.3.build.246-stable'
+    compileOnly "${minecraftTarget == '1.16.5' ? 'com.destroystokyo.paper' : 'io.papermc.paper'}:paper-api:${paperApi}"
     compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
 
     compileOnly('su.plo.voice.api:server:2.1.10') {
@@ -71,6 +81,9 @@ dependencies {
     shadeRuntime 'org.mozilla:rhino:1.7.15.1'
     shadeRuntime 'org.mozilla:rhino-engine:1.7.15.1'
     shadeRuntime 'org.json:json:20260719'
+    shadeRuntime 'commons-io:commons-io:2.22.0'
+    shadeRuntime 'commons-codec:commons-codec:1.23.0'
+    shadeRuntime 'com.google.code.gson:gson:2.15.0'
 
     shade('dev.arbjerg:lavaplayer:2.2.7') {
         exclude group: 'org.slf4j', module: 'slf4j-api'
@@ -104,12 +117,21 @@ dependencies {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.release = javaTarget
 }
 
 processResources {
     inputs.property 'version', project.version
+    inputs.property 'apiVersion', descriptorApi
     filesMatching('paper-plugin.yml') {
-        expand version: project.version
+        expand version: project.version, apiVersion: descriptorApi
+    }
+    if (legacyTarget) {
+        exclude 'paper-plugin.yml'
+        from('src/legacy/resources') {
+            include 'plugin.yml'
+            expand version: project.version, apiVersion: descriptorApi
+        }
     }
 }
 
@@ -130,6 +152,9 @@ shadowJar {
     relocate 'org.apache.http', 'com.eyecrasher.lazodiscs.shadow.org.apache.http'
     relocate 'org.apache.commons.logging', 'com.eyecrasher.lazodiscs.shadow.org.apache.commons.logging'
     relocate 'com.fasterxml.jackson', 'com.eyecrasher.lazodiscs.shadow.com.fasterxml.jackson'
+    relocate 'org.apache.commons.io', 'com.eyecrasher.lazodiscs.shadow.org.apache.commons.io'
+    relocate 'org.apache.commons.codec', 'com.eyecrasher.lazodiscs.shadow.org.apache.commons.codec'
+    relocate 'com.google.gson', 'com.eyecrasher.lazodiscs.shadow.com.google.gson'
 
     exclude 'META-INF/*.SF'
     exclude 'META-INF/*.DSA'
@@ -139,9 +164,6 @@ shadowJar {
     exclude 'META-INF/versions/**/module-info.class'
 
     exclude 'org/slf4j/**'
-    exclude 'org/apache/commons/io/**'
-    exclude 'org/apache/commons/codec/**'
-    exclude 'com/google/gson/**'
     exclude 'com/google/common/**'
     exclude 'it/unimi/dsi/fastutil/**'
     exclude 'com/sun/jna/**'
@@ -181,7 +203,33 @@ def sharedAudio = tasks.register('sharedAudio', Sync) {
     }
     into layout.buildDirectory.dir('generated/sources/sharedAudio')
 }
-sourceSets.main.java.srcDir(sharedAudio)
+sourceSets.main.java.setSrcDirs([sharedAudio, 'src/main/java', legacyTarget ? 'src/legacy/java' : 'src/modern/java'])
+if (!legacyTarget) sourceSets.main.java.srcDir(useSongDatapack ? 'src/compat/java' : 'src/registry/java')
+if (useSongDatapack) {
+    def songsDir = layout.buildDirectory.dir('generated/songs')
+    def generateSongs = tasks.register('generateSongs') {
+        outputs.dir(songsDir)
+        doLast {
+            def root = songsDir.get().asFile
+            root.mkdirs()
+            new File(root, 'pack.mcmeta').text = groovy.json.JsonOutput.toJson([pack: [pack_format: 61, supported_formats: [57, 999], min_format: 57, max_format: 999, description: 'LazoDiscs silent jukebox songs']])
+            def songs = new File(root, 'data/lazodiscs/jukebox_song')
+            songs.mkdirs()
+            (0..15).each { strength ->
+                new File(songs, "recording_${strength}.json").text = groovy.json.JsonOutput.toJson([sound_event: 'minecraft:intentionally_empty', description: '', length_in_seconds: 604800, comparator_output: strength])
+            }
+        }
+    }
+    def songsZip = tasks.register('songsZip', Zip) {
+        dependsOn generateSongs
+        from songsDir
+        archiveFileName = 'lazodiscs-songs.zip'
+        destinationDirectory = layout.buildDirectory.dir('generated/resources')
+        preserveFileTimestamps = false
+        reproducibleFileOrder = true
+    }
+    processResources { from(songsZip) }
+}
 processResources {
     from('../../fabric/26.3/src/main/resources') {
         include 'lazodiscs_languages/**'
@@ -191,9 +239,20 @@ processResources {
 // This fixture is a separate plugin and is never included in the release archive.
 sourceSets {
     integrationTest {
+        if (legacyTarget) {
+            java.setSrcDirs(['src/legacyTest/java'])
+            resources.setSrcDirs(['src/legacyTest/resources'])
+        }
         compileClasspath += sourceSets.main.output + configurations.compileClasspath
         runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
     }
+}
+tasks.named('processIntegrationTestResources') {
+    inputs.property 'apiVersion', descriptorApi
+    filesMatching('paper-plugin.yml') {
+        expand apiVersion: descriptorApi
+    }
+    filesMatching('plugin.yml') { expand apiVersion: descriptorApi }
 }
 tasks.register('integrationPlugin', Jar) {
     dependsOn integrationTestClasses
