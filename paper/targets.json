@@ -1,18 +1,4 @@
 {
-  "1.16.5": {
-    "build": 794,
-    "channel": "STABLE",
-    "java": 17,
-    "api": "1.16.5-R0.1-SNAPSHOT",
-    "download": {
-      "name": "paper-1.16.5-794.jar",
-      "checksums": {
-        "sha256": "e67da4851d08cde378ab2b89be58849238c303351ed2482181a99c2c2b489276"
-      },
-      "size": 53944842,
-      "url": "https://fill-data.papermc.io/v1/objects/e67da4851d08cde378ab2b89be58849238c303351ed2482181a99c2c2b489276/paper-1.16.5-794.jar"
-    }
-  },
   "1.17.1": {
     "build": 411,
     "channel": "STABLE",

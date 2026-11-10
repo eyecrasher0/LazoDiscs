@@ -1,6 +1,6 @@
 # LazoDiscs for Paper — detailed guide
 
-For all 22 versions and legacy behavior differences, see [Paper compatibility](../README.md).
+For all 21 versions and legacy behavior differences, see [Paper compatibility](../README.md).
 
 [English](#installation) · [Русский](#установка)
 

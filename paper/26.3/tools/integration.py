@@ -128,7 +128,7 @@ def main():
     http_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), AudioFixture)
     threading.Thread(target=http_server.serve_forever, daemon=True).start()
     result = run / "result.json"
-    command = [args.java, "-DPaper.IgnoreJavaVersion=true", "-Xms512M", "-Xmx1536M", "-Dterminal.jline=false", "-Dterminal.ansi=false",
+    command = [args.java, "-Xms512M", "-Xmx1536M", "-Dterminal.jline=false", "-Dterminal.ansi=false",
                f"-Dlazodiscs.testAudioUrl=http://127.0.0.1:{http_server.server_port}/test.wav",
                f"-Dlazodiscs.testResult={result}", "-jar", "paper.jar", "--nogui"]
     print(f"Running Paper {args.minecraft} + Plasmo {args.plasmo}; log: {run / 'console.log'}", flush=True)

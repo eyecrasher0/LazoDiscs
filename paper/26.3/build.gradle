@@ -4,13 +4,13 @@ plugins {
 }
 
 def minecraftTarget = providers.gradleProperty('minecraftTarget').getOrElse('26.3')
-def legacyTarget = !minecraftTarget.startsWith('26.') && (
-    !minecraftTarget.startsWith('1.21') || minecraftTarget in ['1.21', '1.21.1', '1.21.3'])
-def javaTarget = minecraftTarget.startsWith('26.') ? 25 : (legacyTarget && !minecraftTarget.startsWith('1.21') ? 17 : 21)
-def useSongDatapack = !legacyTarget && minecraftTarget != '26.3'
-def descriptorApi = javaTarget == 17 ? minecraftTarget.split('\\.')[0..1].join('.') : minecraftTarget
 def targets = new groovy.json.JsonSlurper().parse(file('../targets.json'))
 if (!targets.containsKey(minecraftTarget)) throw new GradleException("Unsupported Paper target: ${minecraftTarget}")
+def javaTarget = targets[minecraftTarget].java as int
+def legacyTarget = !minecraftTarget.startsWith('26.') && (
+    !minecraftTarget.startsWith('1.21') || minecraftTarget in ['1.21', '1.21.1', '1.21.3'])
+def useSongDatapack = !legacyTarget && minecraftTarget != '26.3'
+def descriptorApi = javaTarget < 21 ? minecraftTarget.tokenize('.').take(2).join('.') : minecraftTarget
 def paperApi = targets[minecraftTarget].api
 version = "1.0.7+${minecraftTarget}"
 layout.buildDirectory = layout.projectDirectory.dir("build/${minecraftTarget}")
@@ -52,7 +52,7 @@ configurations {
 }
 
 dependencies {
-    compileOnly "${minecraftTarget == '1.16.5' ? 'com.destroystokyo.paper' : 'io.papermc.paper'}:paper-api:${paperApi}"
+    compileOnly "io.papermc.paper:paper-api:${paperApi}"
     compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
 
     compileOnly('su.plo.voice.api:server:2.1.10') {

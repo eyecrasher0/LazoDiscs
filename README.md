@@ -30,7 +30,7 @@ Use `search` for a song name and `burn` for a link. Spotify support is for indiv
 
 ## Installation
 
-**Paper:** server plugins are available for **22 Paper versions, from 1.16.5 to 26.3**.
+**Paper:** server plugins are available for **21 Paper versions, from 1.17.1 to 26.3**.
 See the [Paper compatibility table and installation guide](paper/README.md).
 They use Bukkit permissions and `plugins/LazoDiscs/config.yml`; players only need
 Plasmo Voice. Install the file for your exact server version.
@@ -91,7 +91,7 @@ LazoDiscs позволяет записать свою музыку на обы�
 
 ### Установка
 
-**Paper:** доступны серверные плагины для **22 версий Paper, от 1.16.5 до 26.3**.
+**Paper:** доступны серверные плагины для **21 версии Paper, от 1.17.1 до 26.3**.
 [Совместимость и установка](paper/README.md). Скачай файл для точной версии сервера.
 Настройки — в `plugins/LazoDiscs/config.yml`, доступ — через Bukkit-права.
 Игрокам нужен только Plasmo Voice.

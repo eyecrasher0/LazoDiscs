@@ -9,29 +9,24 @@ audio URLs use the same audio engine as the 1.0.7 mod builds.
 ## Installation
 
 1. Pick the JAR for your **exact Paper version** from the table below.
-2. Use Java **17+** for 1.16.5–1.20.4, **21+** for 1.21–1.21.11, or **25+** for 26.x.
+2. Use Java **17** for 1.17.1–1.20.4, **21** for 1.21–1.21.11, or **25** for 26.x.
 3. Install the server plugin **Plasmo Voice 2.1.17**, then LazoDiscs in `plugins/`.
 4. Restart the server. Players need the **Plasmo Voice client mod** and a working
    voice connection. They do not need a LazoDiscs client mod or a resource pack.
-
-**Paper 1.16.5 only:** add `-DPaper.IgnoreJavaVersion=true` before `-jar` in the
-server startup command. Paper build 794 rejects Java 17 without this legacy flag;
-LazoDiscs requires Java 17 and was tested with the flag enabled. Later targets do
-not need this flag for their listed Java versions.
 
 This release targets **Paper**. Spigot, Folia and third-party forks have not been
 verified. Use the shaded release JAR, not `-thin`, `-sources` or `-integration` files.
 
 ## Supported targets
 
-The 22 targets are the intersection of available Paper server versions and the
+The 21 targets cover available Paper versions that start normally on the documented Java runtime with the
 Paper/Spigot build of stable Plasmo Voice 2.1.17. Exact test builds and download
 checksums are recorded in [`targets.json`](targets.json). Paper did not publish
 standalone 1.21.2 or 26.1 server builds, so they are not advertised here.
 
-| Paper | Java minimum | Jukebox adapter |
+| Paper | Java runtime | Jukebox adapter |
 | --- | ---: | --- |
-| 1.16.5, 1.17.1, 1.18.2 | 17 | Legacy item PDC |
+| 1.17.1, 1.18.2 | 17 | Legacy item PDC |
 | 1.19.2, 1.19.4, 1.20.1, 1.20.4 | 17 | Legacy item PDC |
 | 1.21, 1.21.1, 1.21.3 | 21 | Legacy item PDC |
 | 1.21.4, 1.21.5, 1.21.6, 1.21.7, 1.21.8, 1.21.9, 1.21.10, 1.21.11 | 21 | Silent song datapack |
@@ -39,6 +34,10 @@ standalone 1.21.2 or 26.1 server builds, so they are not advertised here.
 | 26.3 | 25 | Song registry |
 
 Files are named `lazodiscs-paper-1.0.7+<minecraft>.jar`.
+
+Paper 1.16.5 is not included: stock Paper requires Java 16 or older, while the
+current Plasmo Voice server plugin requires Java 17. This release does not require
+a Java-version override or a modified dependency.
 
 ## Commands and permissions
 
@@ -68,7 +67,7 @@ Paper 1.21.4+ replaces the vanilla song with a silent, long-lived registry entry
 preserving comparator strength and the native playing state until custom audio ends.
 The bundled datapack on 1.21.4–26.2 is installed and enabled by the plugin bootstrap.
 
-On 1.16.5–1.21.3, the plugin keeps the original item type and stops vanilla audio.
+On 1.17.1–1.21.3, the plugin keeps the original item type and stops vanilla audio.
 Native hopper insertion/extraction is supported from **1.19.4**, including retaining
 the disc while custom audio loads/plays. Earlier game versions have no vanilla
 jukebox inventory. Legacy playback does not keep the native "playing" redstone
@@ -113,10 +112,6 @@ of public music services.
 Нужны Paper точной версии из таблицы, указанная версия Java и серверный
 **Plasmo Voice 2.1.17**. Положи `lazodiscs-paper-1.0.7+<версия>.jar` в `plugins/`
 и перезапусти сервер. Игрокам нужен только клиентский Plasmo Voice.
-
-**Только для Paper 1.16.5:** перед `-jar` в команде запуска добавь
-`-DPaper.IgnoreJavaVersion=true`: плагину нужна Java 17, а старая сборка Paper
-без этого флага её отклоняет. Проверки 1.16.5 выполнялись с этим флагом.
 
 Держи одну пластинку в основной руке: `/lazodisc burn <ссылка> [название]` — запись,
 `/lazodisc search <песня>` — поиск, `/lazodisc erase` — стирание. Права и настройки
