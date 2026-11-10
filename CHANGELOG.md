@@ -5,6 +5,7 @@
 ### Added
 
 - First Paper plugin release: 22 exact server targets from 1.16.5 through 26.3, matching available Paper builds in stable Plasmo Voice 2.1.17's compatibility list. The existing mod builds are unchanged.
+- Paper 1.16.5 requires Java 17 and the legacy startup flag `-DPaper.IgnoreJavaVersion=true`; later targets use their documented Java versions without this flag.
 - Burn, search and erase commands with Bukkit permissions, persistent item recordings, configurable language and playback settings, and positional Plasmo Voice audio using the existing 1.0.7 audio engine.
 - Version-specific jukebox adapters: legacy PDC items through 1.21.3, silent datapack songs from 1.21.4 through 26.2, and registry songs on 26.3. Native hopper insertion/extraction is supported where the game provides jukebox inventories (1.19.4+).
 - Isolated, relocated audio libraries for old Paper servers, cancellation of pending playback on ejection/unload, protection checks, and cleanup of sources, workers and commands at shutdown.

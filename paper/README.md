@@ -14,6 +14,11 @@ audio URLs use the same audio engine as the 1.0.7 mod builds.
 4. Restart the server. Players need the **Plasmo Voice client mod** and a working
    voice connection. They do not need a LazoDiscs client mod or a resource pack.
 
+**Paper 1.16.5 only:** add `-DPaper.IgnoreJavaVersion=true` before `-jar` in the
+server startup command. Paper build 794 rejects Java 17 without this legacy flag;
+LazoDiscs requires Java 17 and was tested with the flag enabled. Later targets do
+not need this flag for their listed Java versions.
+
 This release targets **Paper**. Spigot, Folia and third-party forks have not been
 verified. Use the shaded release JAR, not `-thin`, `-sources` or `-integration` files.
 
@@ -108,6 +113,10 @@ of public music services.
 Нужны Paper точной версии из таблицы, указанная версия Java и серверный
 **Plasmo Voice 2.1.17**. Положи `lazodiscs-paper-1.0.7+<версия>.jar` в `plugins/`
 и перезапусти сервер. Игрокам нужен только клиентский Plasmo Voice.
+
+**Только для Paper 1.16.5:** перед `-jar` в команде запуска добавь
+`-DPaper.IgnoreJavaVersion=true`: плагину нужна Java 17, а старая сборка Paper
+без этого флага её отклоняет. Проверки 1.16.5 выполнялись с этим флагом.
 
 Держи одну пластинку в основной руке: `/lazodisc burn <ссылка> [название]` — запись,
 `/lazodisc search <песня>` — поиск, `/lazodisc erase` — стирание. Права и настройки
