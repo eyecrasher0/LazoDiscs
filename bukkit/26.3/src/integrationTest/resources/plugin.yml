@@ -1,0 +1,6 @@
+name: LazoDiscsIntegration
+version: '1.0.8'
+main: com.eyecrasher.lazodiscs.test.BukkitIntegration
+api-version: '1.16'
+depend: [LazoDiscs, PlasmoVoice]
+folia-supported: true

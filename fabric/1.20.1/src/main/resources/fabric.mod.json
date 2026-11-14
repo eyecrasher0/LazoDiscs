@@ -4,25 +4,33 @@
   "version": "${version}",
   "name": "LazoDiscs",
   "description": "Custom music discs with Plasmo Voice positional audio.",
-  "authors": ["EyeCrasher"],
+  "authors": [
+    "EyeCrasher"
+  ],
   "contact": {
     "homepage": "https://modrinth.com/mod/lazodiscs",
-    "sources": "https://github.com/EyeCrasher07/LazoDiscs"
+    "sources": "https://github.com/eyecrasher0/LazoDiscs"
   },
   "license": "GPL-3.0-only",
   "icon": "assets/lazodiscs/icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": ["com.eyecrasher.lazodiscs.LazoDiscs"],
-    "client": ["com.eyecrasher.lazodiscs.event.LazoDiscsClientEvents"]
+    "main": [
+      "com.eyecrasher.lazodiscs.LazoDiscs"
+    ],
+    "client": [
+      "com.eyecrasher.lazodiscs.event.LazoDiscsClientEvents"
+    ]
   },
-  "mixins": ["lazodiscs.mixins.json"],
+  "mixins": [
+    "lazodiscs.mixins.json"
+  ],
   "depends": {
     "fabricloader": ">=0.16.0",
     "fabric": "*",
     "minecraft": "1.20.1",
     "java": ">=17",
-    "plasmovoice": ">=2.1.8"
+    "plasmovoice": ">=2.1.17"
   },
   "suggests": {
     "sophisticatedcore": "*",

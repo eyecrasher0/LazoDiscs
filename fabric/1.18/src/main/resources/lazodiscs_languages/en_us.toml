@@ -1,0 +1,53 @@
+# LazoDiscs server messages
+# Placeholders use %name%, for example %title% or %reason%.
+
+source_line.discs = "Discs"
+now_playing = "Now playing: %title%"
+common.unknown = "Unknown"
+
+command.hold_disc = "Hold a vanilla music disc in your main hand."
+command.invalid_url = "Invalid URL: %reason%"
+command.burn_usage = "Usage: /lazodisc burn <url> [title]"
+command.burned = "Burned LazoDisc: %title%"
+command.resolving_track = "Checking track..."
+command.burn_failed = "Could not burn disc: %reason%"
+command.players_only = "Only players can use this command."
+command.not_lazodisc = "This item is not a LazoDisc."
+command.data_removed = "LazoDisc data removed."
+
+dependency.plasmo_voice_required = "Plasmo Voice is required to play LazoDiscs."
+
+permission.no_permission = "You do not have permission to use LazoDiscs."
+permission.play_no_permission = "You do not have permission to play LazoDiscs."
+
+search.usage = "Usage: /lazodisc search <song name>"
+search.names_only = "Use /lazodisc search with a song name. Use /lazodisc burn for links."
+search.searching = "Searching: %query%"
+search.failed = "Search failed: %reason%"
+search.no_songs = "No songs found for: %query%"
+search.header = "=== LazoDiscs Search: %query% ==="
+search.click_to_paste = "Click to paste: %command%"
+search.timed_out = "Search timed out after %seconds% seconds"
+
+url.empty = "URL is empty"
+url.invalid = "Invalid URL"
+url.http_disabled = "HTTP URLs are disabled"
+url.https_disabled = "HTTPS URLs are disabled"
+url.unsupported_scheme = "Only HTTP/HTTPS URLs or spotify: URIs are supported"
+url.domain_not_allowed = "Domain is not allowed by config"
+
+spotify.track_only = "Only Spotify track links are supported for LazoDiscs. Search album/playlist tracks by song name."
+spotify.invalid_track = "Invalid Spotify track link"
+spotify.disabled = "Spotify search is disabled in config"
+spotify.metadata_failed = "Could not read Spotify track metadata"
+
+audio.load_failed = "%reason%"
+audio.load_busy = "Too many audio requests. Try again shortly."
+audio.no_matches = "No matching audio was found"
+audio.resolve_timed_out = "Audio resolve timed out after %seconds% seconds"
+audio.zero_samples = "Decoded audio contains no samples"
+audio.no_frames = "No audio frames were received from LavaPlayer for 15 seconds"
+audio.track_stuck = "Track got stuck for %threshold_ms% ms"
+audio.track_too_long = "Track is too long. Max: %max%"
+
+audio.youtube_login_required = "YouTube requires sign-in. Please try another link."

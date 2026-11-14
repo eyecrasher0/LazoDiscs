@@ -6,7 +6,7 @@ plugins {
     id 'xyz.wagyourtail.jvmdowngrader' version '2.0.1'
 }
 
-version = '1.0.7+1.17.1'
+version = '1.0.8+1.17.1'
 group = 'com.eyecrasher'
 
 base {
@@ -40,6 +40,8 @@ configurations {
     shade
     shadeRuntime
     implementation.extendsFrom(shade)
+    // Resolve private Gson once; transitive audio/UI copies must not precede it.
+    shade.resolutionStrategy.force 'com.google.code.gson:gson:2.15.0'
 }
 
 // Older Forge versions need SRG remapping, including a Mixin reference map.
@@ -76,7 +78,7 @@ dependencies {
     }
     // Private libraries are relocated and kept off Minecraft's compile classpath.
     // The BOM aligns core/databind 2.21.7 with annotations 2.21.
-    shadeRuntime platform('com.fasterxml.jackson:jackson-bom:2.21.7')
+    shadeRuntime platform('com.fasterxml.jackson:jackson-bom:2.23.0')
     shadeRuntime 'com.fasterxml.jackson.core:jackson-core'
     shadeRuntime 'com.fasterxml.jackson.core:jackson-databind'
     shadeRuntime 'com.fasterxml.jackson.core:jackson-annotations'
@@ -85,15 +87,15 @@ dependencies {
     }
 
     // Security-patched audio transitives stay off Minecraft's compile graph.
-    shadeRuntime 'org.mozilla:rhino:1.7.15.1'
-    shadeRuntime 'org.mozilla:rhino-engine:1.7.15.1'
-    shadeRuntime 'org.json:json:20260719'
+    shadeRuntime 'org.mozilla:rhino:1.9.2'
+    shadeRuntime 'org.mozilla:rhino-engine:1.9.2'
+    shadeRuntime 'org.json:json:20260814'
 
     // Older Minecraft versions supply old utility libraries and no SLF4J. Keep audio's modern
     // utilities private instead of linking LavaPlayer against the host's older APIs.
     shadeRuntime 'commons-io:commons-io:2.22.0'
-    shadeRuntime 'commons-codec:commons-codec:1.22.1'
-    shadeRuntime 'com.google.code.gson:gson:2.14.0'
+    shadeRuntime 'commons-codec:commons-codec:1.23.0'
+    shadeRuntime 'com.google.code.gson:gson:2.15.0'
     shadeRuntime 'org.slf4j:slf4j-api:2.0.20'
     shadeRuntime 'org.slf4j:slf4j-jdk14:2.0.20'
 
@@ -119,7 +121,7 @@ dependencies {
         exclude group: 'org.mozilla'
         exclude group: 'org.json'
     }
-    shade('dev.lavalink.youtube:v2:2be8e542d3f6f178e048dca565892684c2e40177-SNAPSHOT') {
+    shade('dev.lavalink.youtube:v2:e41dd95f8bd134b51e75080fb28cc805fecb431a-SNAPSHOT') {
         exclude group: 'org.slf4j', module: 'slf4j-api'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'commons-codec', module: 'commons-codec'
@@ -244,3 +246,7 @@ apply from: '../../gradle/third-party-notices.gradle'
 
 // Exclude deprecated YouTube authentication and check the final archive.
 apply from: '../../gradle/audio-sources.gradle'
+
+apply from: '../../gradle/audio-errors.gradle'
+
+apply from: '../../gradle/release-layout.gradle'

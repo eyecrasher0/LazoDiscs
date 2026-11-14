@@ -1,6 +1,7 @@
 package com.eyecrasher.lazodiscs.command;
 
 import com.eyecrasher.lazodiscs.LazoDiscs;
+import com.eyecrasher.lazodiscs.voice.YoutubeLoginFailure;
 import com.eyecrasher.lazodiscs.config.LazoDiscsConfig;
 import com.eyecrasher.lazodiscs.data.CustomDiscData;
 import com.eyecrasher.lazodiscs.data.DiscDataUtil;
@@ -136,7 +137,7 @@ public final class LazoDiscsCommands {
                         Thread.currentThread().interrupt();
                     } catch (Exception t) {
                         LazoDiscs.LOGGER.warn(
-                                "LazoDiscs could not burn '{}': {}", url, t.toString());
+                                "LazoDiscs could not burn '{}': {}", url, (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
                         server.execute(
                                 () ->
                                         player.sendSystemMessage(
@@ -251,7 +252,7 @@ public final class LazoDiscsCommands {
                         Thread.currentThread().interrupt();
                     } catch (Exception t) {
                         LazoDiscs.LOGGER.warn(
-                                "LazoDiscs search failed for '{}': {}", cleanQuery, t.toString());
+                                "LazoDiscs search failed for '{}': {}", cleanQuery, (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
                         server.execute(
                                 () ->
                                         player.sendSystemMessage(
@@ -374,6 +375,7 @@ public final class LazoDiscsCommands {
     }
 
     private static String messageOf(Throwable t) {
+        if (YoutubeLoginFailure.matches(t)) return LazoDiscsText.youtubeLoginRequired();
         if (t == null) return LazoDiscsText.unknown();
         String message = t.getMessage();
         Throwable cause = t.getCause();

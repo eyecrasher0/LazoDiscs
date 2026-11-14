@@ -1,0 +1,13 @@
+plugins { id 'xyz.wagyourtail.jvmdowngrader' version '2.0.1'; id 'com.gradleup.shadow' version '8.3.11'; id 'java-library'; id 'net.minecraftforge.gradle' version '6.0.54' }
+minecraft { mappings channel: 'official', version: '1.16.5' }
+dependencies { minecraft 'net.minecraftforge:forge:1.16.5-36.2.42' }
+reobf { shadowJar {} }
+apply from: '../../gradle/legacy-client.gradle'
+
+apply from: '../../gradle/release-layout.gradle'
+
+// The client transport embeds no game or Voice implementation.
+shadowJar { configurations = []; archiveClassifier.set('java17') }
+jar { archiveClassifier.set('thin') }
+ext.lazoTargetJava = 8
+apply from: '../../gradle/legacy-java-compatibility.gradle'

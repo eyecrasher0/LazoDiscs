@@ -4,7 +4,7 @@ plugins {
     id 'com.gradleup.shadow' version '8.3.11'
 }
 
-version = '1.0.7+1.21.1'
+version = '1.0.8+1.21.1'
 group = 'com.eyecrasher'
 
 base {
@@ -38,10 +38,12 @@ configurations {
     shade
     shadeRuntime
     implementation.extendsFrom(shade)
+    // Resolve private Gson once; transitive audio/UI copies must not precede it.
+    shade.resolutionStrategy.force 'com.google.code.gson:gson:2.15.0'
 }
 
 neoForge {
-    version = '21.1.10'
+    version = '21.1.266'
     mods {
         lazodiscs {
             sourceSet(sourceSets.main)
@@ -50,7 +52,7 @@ neoForge {
 }
 
 dependencies {
-    implementation 'net.neoforged:neoforge:21.1.10'
+    implementation 'net.neoforged:neoforge:21.1.266'
 
     // Plasmo Voice API is compile-only because the real Plasmo Voice mod provides it at runtime.
     // Its transitive Guava/FastUtil versions conflict with Minecraft 1.21.1 strict dependency pins,
@@ -68,7 +70,7 @@ dependencies {
     }
     // Private libraries are relocated and kept off Minecraft's compile classpath.
     // The BOM aligns core/databind 2.21.7 with annotations 2.21.
-    shadeRuntime platform('com.fasterxml.jackson:jackson-bom:2.21.7')
+    shadeRuntime platform('com.fasterxml.jackson:jackson-bom:2.23.0')
     shadeRuntime 'com.fasterxml.jackson.core:jackson-core'
     shadeRuntime 'com.fasterxml.jackson.core:jackson-databind'
     shadeRuntime 'com.fasterxml.jackson.core:jackson-annotations'
@@ -77,9 +79,10 @@ dependencies {
     }
 
     // Security-patched audio transitives stay off Minecraft's compile graph.
-    shadeRuntime 'org.mozilla:rhino:1.7.15.1'
-    shadeRuntime 'org.mozilla:rhino-engine:1.7.15.1'
-    shadeRuntime 'org.json:json:20260719'
+    shadeRuntime 'org.mozilla:rhino:1.9.2'
+    shadeRuntime 'org.mozilla:rhino-engine:1.9.2'
+    shadeRuntime 'org.json:json:20260814'
+    shadeRuntime 'com.google.code.gson:gson:2.15.0'
 
     // Built-in audio resolver/player. This makes YouTube, SoundCloud, Bandcamp, Vimeo,
     // Twitch, direct HTTP audio, mp3/flac/wav/ogg/m4a/etc work without yt-dlp/ffmpeg.
@@ -103,7 +106,7 @@ dependencies {
         exclude group: 'org.mozilla'
         exclude group: 'org.json'
     }
-    shade('dev.lavalink.youtube:v2:2be8e542d3f6f178e048dca565892684c2e40177-SNAPSHOT') {
+    shade('dev.lavalink.youtube:v2:e41dd95f8bd134b51e75080fb28cc805fecb431a-SNAPSHOT') {
         exclude group: 'org.slf4j', module: 'slf4j-api'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'commons-codec', module: 'commons-codec'
@@ -156,6 +159,7 @@ shadowJar {
     // They are relocated to avoid Java module split-package crashes with NeoForge/Minecraft.
     relocate 'org.apache.http', 'com.eyecrasher.lazodiscs.shadow.org.apache.http'
     relocate 'org.apache.commons.logging', 'com.eyecrasher.lazodiscs.shadow.org.apache.commons.logging'
+    relocate 'com.google.gson', 'com.eyecrasher.lazodiscs.shadow.com.google.gson'
     relocate 'com.fasterxml.jackson', 'com.eyecrasher.lazodiscs.shadow.com.fasterxml.jackson'
 
     exclude 'META-INF/*.SF'
@@ -212,3 +216,7 @@ apply from: '../../gradle/third-party-notices.gradle'
 
 // Exclude deprecated YouTube authentication and check the final archive.
 apply from: '../../gradle/audio-sources.gradle'
+
+apply from: '../../gradle/audio-errors.gradle'
+
+apply from: '../../gradle/release-layout.gradle'

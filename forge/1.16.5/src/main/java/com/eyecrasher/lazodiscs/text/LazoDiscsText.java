@@ -68,6 +68,10 @@ public final class LazoDiscsText {
         return component("audio.load_failed", "title", title, "reason", clean(reason));
     }
 
+    public static String youtubeLoginRequired() {
+        return text("audio.youtube_login_required");
+    }
+
     public static String audioLoadBusy() {
         return text("audio.load_busy");
     }
@@ -380,6 +384,7 @@ public final class LazoDiscsText {
 
     private static Map<String, String> defaultTranslations() {
         Map<String, String> map = new LinkedHashMap<>();
+        map.put("audio.youtube_login_required", "YouTube requires sign-in. Please try another link.");
         map.put("source_line.discs", "Discs");
         map.put("now_playing", "Now playing: %title%");
         map.put("common.unknown", "Unknown");

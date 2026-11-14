@@ -1,0 +1,5 @@
+// One classifier/filter implementation for every mod and Bukkit release.
+sourceSets.main.java.srcDir(file('../../common/src/main/java'))
+dependencies {
+    compileOnly(project.plugins.hasPlugin('net.neoforged.moddev') ? 'org.apache.logging.log4j:log4j-core' : 'org.apache.logging.log4j:log4j-core:2.26.0')
+}

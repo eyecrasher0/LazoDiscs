@@ -34,8 +34,10 @@ def main():
     parser.add_argument("--plasmo", choices=("stable", "beta"), default="stable")
     parser.add_argument("--jobs", type=int, choices=range(1, 5), default=2)
     parser.add_argument("--test-only", action="store_true")
+    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--work-root", type=Path)
     args = parser.parse_args()
-    output = MODULE / "build/matrix"
+    output = args.output_root / "verification/native-paper" if args.output_root else MODULE / "build/matrix"
     output.mkdir(parents=True, exist_ok=True)
     build_env = dict(os.environ, JAVA_HOME=java_home(25))
 
@@ -43,19 +45,24 @@ def main():
         row = {"minecraft": version, "plasmo": args.plasmo}
         try:
             if not args.test_only:
+                build_directory = args.output_root.resolve() / "paper" / version if args.output_root else MODULE / "build" / version
+                build_args = [f"-PlazoOutputRoot={args.output_root.resolve()}"] if args.output_root else []
                 with (output / f"build-{version}.log").open("w") as log:
                     subprocess.run([str(MODULE / "gradlew"), "-p", str(MODULE),
-                                    "--project-cache-dir", str(MODULE / f"build/{version}/gradle-cache"), f"-PminecraftTarget={version}",
+                                    "--project-cache-dir", str(build_directory / "gradle-cache"), f"-PminecraftTarget={version}", *build_args,
                                     "build", "integrationPlugin", "--console=plain"], env=build_env, stdout=log,
                                    stderr=subprocess.STDOUT, check=True, timeout=300)
+            cache = (args.work_root / version if args.work_root else MODULE / f"build/{version}/integration").resolve()
+            extra = (["--output-root", str(args.output_root.resolve())] if args.output_root else []) + ["--work-dir", str(cache)]
             with (output / f"test-{version}-{args.plasmo}.log").open("w") as log:
                 subprocess.run([sys.executable, str(MODULE / "tools/integration.py"), "--minecraft", version,
-                                "--plasmo", args.plasmo, "--java", str(Path(java_home(TARGETS[version]["java"])) / "bin/java")],
+                                "--plasmo", args.plasmo, "--java", str(Path(java_home(TARGETS[version]["java"])) / "bin/java"), *extra],
                                stdout=log, stderr=subprocess.STDOUT, check=True, timeout=300)
-            result = json.loads((MODULE / f"build/{version}/integration/result-{args.plasmo}.json").read_text())
+            result = json.loads((cache / f"result-{args.plasmo}.json").read_text())
             if result["failure"] is not None:
                 raise RuntimeError(result["failure"])
-            jar = MODULE / f"build/{version}/libs/lazodiscs-paper-1.0.7+{version}.jar"
+            directory = args.output_root.resolve() / "paper" / version if args.output_root else MODULE / "build" / version
+            jar = directory / f"libs/lazodiscs-paper-1.0.8+{version}.jar"
             digest = hashlib.sha256(jar.read_bytes()).hexdigest()
             if digest != result["jar_sha256"]:
                 raise RuntimeError("Artifact changed after integration test")

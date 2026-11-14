@@ -1,0 +1,11 @@
+// Select only on Minecraft targets whose newest official Voice uses the old 2.0 API.
+def pv20Sources = tasks.register('pv20Sources', Sync) {
+    from('src/main/java') {
+        exclude 'com/eyecrasher/lazodiscs/voice/PlasmoVoiceBridge.java'
+        exclude 'com/eyecrasher/lazodiscs/voice/LazoDiscsVoiceAddon.java'
+    }
+    from('../../common/variants/pv20/java')
+    into layout.buildDirectory.dir('generated/sources/pv20')
+}
+sourceSets.main.java.setSrcDirs([pv20Sources, file('../../common/src/main/java')])
+dependencies { compileOnly 'javax.inject:javax.inject:1' }

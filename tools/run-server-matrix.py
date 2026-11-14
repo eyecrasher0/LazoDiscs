@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""Execute the Bukkit integration on each advertised, pinned Paper/Purpur/Folia target."""
+import argparse,concurrent.futures,hashlib,json,subprocess,sys
+from pathlib import Path
+ROOT=Path(__file__).resolve().parents[1]
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--output-root',type=Path,default=ROOT/'build-matrix')
+    p.add_argument('--work-root',type=Path,default=ROOT/'build-matrix/servers')
+    p.add_argument('--java16',required=True);p.add_argument('--java17',required=True);p.add_argument('--java21',required=True);p.add_argument('--java25',required=True)
+    p.add_argument('--jobs',type=int,default=2,choices=range(1,5));p.add_argument('--platform',nargs='+',default=['paper','purpur','folia'])
+    p.add_argument('--versions',nargs='+');p.add_argument('--resume',action='store_true')
+    args=p.parse_args();out=args.output_root.resolve();work=args.work_root.resolve()
+    release=out/'bukkit/26.3/libs/lazodiscs-bukkit-1.0.8.jar';fixture=release.with_name('lazodiscs-bukkit-integration.jar')
+    sha=hashlib.sha256(release.read_bytes()).hexdigest();fixture_sha=hashlib.sha256(fixture.read_bytes()).hexdigest()
+    rows=[r for r in json.loads((ROOT/'compatibility.json').read_text())['entries'] if r['platform'] in args.platform and (not args.versions or r['minecraft'] in args.versions)]
+    def run(row):
+        platform,mc=row['platform'],row['minecraft'];result=work/platform/mc/'result.json'
+        if args.resume and result.exists():
+            prior=json.loads(result.read_text())
+            if prior.get('failure') is None and prior.get('jar_sha256')==sha and prior.get('fixture_sha256')==fixture_sha and prior.get('voice')==row['voice']['version']:
+                print(f'SKIP verified {platform}/{mc}',flush=True);return prior
+        log=out/'logs/server'/f'{platform}-{mc}.log';log.parent.mkdir(parents=True,exist_ok=True)
+        command=[sys.executable,str(ROOT/'tools/server-integration.py'),'--platform',platform,'--minecraft',mc,'--java',getattr(args,'java'+str(row['java'])),'--output-root',str(out),'--work-root',str(work)]
+        with log.open('w') as stream:code=subprocess.run(command,cwd=ROOT,stdout=stream,stderr=subprocess.STDOUT,timeout=360).returncode
+        report=json.loads(result.read_text()) if result.exists() else {'failure':'No server fixture result'}
+        if code:report['failure']=report.get('failure') or f'Driver exit {code}; inspect {log}'
+        report.update(platform=platform,minecraft=mc,driver_log=str(log))
+        print(json.dumps({k:report.get(k) for k in ['platform','minecraft','passed','failure','driver_log']}),flush=True);return report
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        reports=list(pool.map(run,rows))
+    path=out/'verification/bukkit-server-matrix.json';path.parent.mkdir(exist_ok=True);path.write_text(json.dumps(reports,indent=2)+'\n')
+    if any(r.get('failure') is not None for r in reports):raise SystemExit(1)
+if __name__=='__main__':main()

@@ -34,9 +34,10 @@ import java.util.function.Consumer;
 @Addon(
         id = "lazodiscs",
         name = "LazoDiscs",
-        version = "1.0.7",
+        version = "1.0.8",
         authors = {"EyeCrasher"})
 public final class LazoDiscsVoiceAddon implements AddonInitializer {
+    private final YoutubeLoginLogFilter youtubeLoginLogs = new YoutubeLoginLogFilter(message -> LazoDiscs.LOGGER.warn("{}", message));
     private final LazoDiscs plugin;
     @InjectPlasmoVoice private PlasmoVoiceServer server;
     private volatile ServerSourceLine line;
@@ -48,6 +49,7 @@ public final class LazoDiscsVoiceAddon implements AddonInitializer {
 
     @Override
     public void onAddonInitialize() {
+        youtubeLoginLogs.install();
         try (InputStream icon =
                 getClass()
                         .getClassLoader()
@@ -66,6 +68,7 @@ public final class LazoDiscsVoiceAddon implements AddonInitializer {
 
     @Override
     public void onAddonShutdown() {
+        youtubeLoginLogs.close();
         line = null;
         plugin.voiceStopped();
     }
@@ -178,7 +181,7 @@ public final class LazoDiscsVoiceAddon implements AddonInitializer {
                                         LazoDiscs.LOGGER.warn(
                                                 "Could not play '{}': {}",
                                                 disc.title(),
-                                                error.toString());
+                                                (YoutubeLoginFailure.matches(error) ? LazoDiscsText.youtubeLoginRequired() : error.toString()));
                                         finish(false);
                                     }
                                 }
@@ -249,7 +252,7 @@ public final class LazoDiscsVoiceAddon implements AddonInitializer {
             try {
                 if (oldSender != null) oldSender.stop();
             } catch (RuntimeException error) {
-                LazoDiscs.LOGGER.warn("Could not stop disc sender: {}", error.toString());
+                LazoDiscs.LOGGER.warn("Could not stop disc sender: {}", (YoutubeLoginFailure.matches(error) ? LazoDiscsText.youtubeLoginRequired() : error.toString()));
             }
             try {
                 if (oldPlayback != null) oldPlayback.close();
@@ -257,7 +260,7 @@ public final class LazoDiscsVoiceAddon implements AddonInitializer {
                 try {
                     source.remove();
                 } catch (RuntimeException error) {
-                    LazoDiscs.LOGGER.warn("Could not remove disc source: {}", error.toString());
+                    LazoDiscs.LOGGER.warn("Could not remove disc source: {}", (YoutubeLoginFailure.matches(error) ? LazoDiscsText.youtubeLoginRequired() : error.toString()));
                 }
             }
             if (!manual) plugin.onMain(() -> finished.accept(failure.get()));
@@ -265,6 +268,7 @@ public final class LazoDiscsVoiceAddon implements AddonInitializer {
     }
 
     public static String messageOf(Throwable error) {
+        if (YoutubeLoginFailure.matches(error)) return LazoDiscsText.youtubeLoginRequired();
         while (error.getCause() != null
                 && (error.getMessage() == null
                         || error.getMessage().equals(error.getCause().toString())))

@@ -13,7 +13,7 @@ public final class VanillaDiscs {
             case "far" -> 5;
             case "mall" -> 6;
             case "mellohi" -> 7;
-            case "stal" -> 8;
+            case "stal", "bounce" -> 8;
             case "strad", "lava_chicken" -> 9;
             case "ward", "tears" -> 10;
             case "11", "creator_music_box" -> 11;

@@ -1,0 +1,299 @@
+plugins {
+    id 'java-library'
+    id 'com.gradleup.shadow' version '9.2.2'
+    id 'xyz.wagyourtail.jvmdowngrader' version '2.0.1'
+}
+
+version = '1.0.8'
+def javaTarget = 17
+group = 'com.eyecrasher'
+
+base {
+    archivesName = 'lazodiscs-bukkit'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    withSourcesJar()
+}
+
+repositories {
+    maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    mavenCentral()
+    maven {
+        url = 'https://repo.plasmoverse.com/releases'
+    }
+    maven {
+        url = 'https://repo.plo.su/'
+    }
+    maven {
+        url = 'https://maven.lavalink.dev/releases'
+    }
+    maven {
+        url = 'https://maven.lavalink.dev/snapshots'
+    }
+    maven {
+        url = 'https://jitpack.io'
+    }
+}
+
+configurations {
+    shade
+    shadeRuntime
+    implementation.extendsFrom(shade)
+    // Resolve private Gson once; transitive audio/UI copies must not precede it.
+    shade.resolutionStrategy.force 'com.google.code.gson:gson:2.15.0'
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1'
+    testImplementation 'org.apache.logging.log4j:log4j-core:2.26.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    compileOnly 'org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT'
+    shade 'net.kyori:adventure-text-serializer-gson:4.26.1'
+    shade 'net.kyori:adventure-text-serializer-legacy:4.26.1'
+    shade 'org.slf4j:slf4j-api:2.0.20'
+    shadeRuntime 'org.slf4j:slf4j-jdk14:2.0.20'
+    compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
+    compileOnly 'javax.inject:javax.inject:1'
+    compileOnly 'com.google.code.gson:gson:2.15.0'
+
+    compileOnly('su.plo.voice.api:server:2.1.10') {
+        exclude group: 'com.google.guava', module: 'guava'
+        exclude group: 'com.google.guava', module: 'failureaccess'
+        exclude group: 'com.google.guava', module: 'listenablefuture'
+        exclude group: 'com.google.code.findbugs', module: 'jsr305'
+        exclude group: 'org.checkerframework', module: 'checker-qual'
+        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        exclude group: 'com.google.j2objc', module: 'j2objc-annotations'
+        exclude group: 'it.unimi.dsi', module: 'fastutil'
+        exclude group: 'com.google.code.gson', module: 'gson'
+    }
+
+    // Private libraries are relocated and kept off Minecraft's compile classpath.
+    // The BOM aligns core/databind 2.21.7 with annotations 2.21.
+    shadeRuntime platform('com.fasterxml.jackson:jackson-bom:2.23.0')
+    shadeRuntime 'com.fasterxml.jackson.core:jackson-core'
+    shadeRuntime 'com.fasterxml.jackson.core:jackson-databind'
+    shadeRuntime 'com.fasterxml.jackson.core:jackson-annotations'
+    shadeRuntime('org.apache.httpcomponents:httpclient:4.5.14') {
+        exclude group: 'commons-codec', module: 'commons-codec'
+    }
+
+    // Security-patched audio transitives stay off Minecraft's compile graph.
+    shadeRuntime 'org.mozilla:rhino:1.9.2'
+    shadeRuntime 'org.mozilla:rhino-engine:1.9.2'
+    shadeRuntime 'org.json:json:20260814'
+    shadeRuntime 'commons-io:commons-io:2.22.0'
+    shadeRuntime 'commons-codec:commons-codec:1.23.0'
+    shadeRuntime 'com.google.code.gson:gson:2.15.0'
+
+    shade('dev.arbjerg:lavaplayer:2.2.7') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'commons-codec', module: 'commons-codec'
+        exclude group: 'net.java.dev.jna', module: 'jna'
+        exclude group: 'org.jetbrains', module: 'annotations'
+        exclude group: 'org.jetbrains.kotlin'
+        exclude group: 'org.jetbrains.kotlinx'
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'com.fasterxml.jackson'
+        exclude group: 'org.apache.httpcomponents'
+        exclude group: 'org.mozilla'
+        exclude group: 'org.json'
+    }
+    shade('dev.lavalink.youtube:v2:e41dd95f8bd134b51e75080fb28cc805fecb431a-SNAPSHOT') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        exclude group: 'commons-io', module: 'commons-io'
+        exclude group: 'commons-codec', module: 'commons-codec'
+        exclude group: 'net.java.dev.jna', module: 'jna'
+        exclude group: 'org.jetbrains', module: 'annotations'
+        exclude group: 'org.jetbrains.kotlin'
+        exclude group: 'org.jetbrains.kotlinx'
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'com.fasterxml.jackson'
+        exclude group: 'org.apache.httpcomponents'
+        exclude group: 'org.mozilla'
+        exclude group: 'org.json'
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = javaTarget
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('plugin.yml') { expand version: project.version }
+}
+
+jar {
+    archiveClassifier.set('thin')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    configurations = [project.configurations.shade, project.configurations.shadeRuntime]
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    filesMatching('META-INF/services/**') {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+    mergeServiceFiles()
+
+    relocate 'org.apache.http', 'com.eyecrasher.lazodiscs.shadow.org.apache.http'
+    relocate 'org.apache.commons.logging', 'com.eyecrasher.lazodiscs.shadow.org.apache.commons.logging'
+    relocate 'com.fasterxml.jackson', 'com.eyecrasher.lazodiscs.shadow.com.fasterxml.jackson'
+    relocate 'org.apache.commons.io', 'com.eyecrasher.lazodiscs.shadow.org.apache.commons.io'
+    relocate 'org.apache.commons.codec', 'com.eyecrasher.lazodiscs.shadow.org.apache.commons.codec'
+    relocate 'com.google.gson', 'com.eyecrasher.lazodiscs.shadow.com.google.gson'
+
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+    exclude 'META-INF/MANIFEST.MF'
+    exclude 'module-info.class'
+    exclude 'META-INF/versions/**/module-info.class'
+
+    relocate 'org.slf4j', 'com.eyecrasher.lazodiscs.shadow.org.slf4j'
+    relocate 'net.kyori', 'com.eyecrasher.lazodiscs.shadow.net.kyori'
+    exclude 'com/google/common/**'
+    exclude 'it/unimi/dsi/fastutil/**'
+    exclude 'com/sun/jna/**'
+    exclude 'javax/annotation/**'
+    exclude 'org/jetbrains/annotations/**'
+    exclude 'org/checkerframework/**'
+    exclude 'kotlin/**'
+    exclude 'kotlinx/**'
+}
+
+assemble.dependsOn shadowJar
+build.dependsOn shadowJar
+
+// Include the project's license in release, development and source archives.
+tasks.withType(Jar).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from(file('../../LICENSE'))
+}
+
+// Stock Paper 1.17 uses Java 16. Convert the complete shaded archive.
+ext.lazoTargetJava = 16
+apply from: '../../gradle/legacy-java-compatibility.gradle'
+
+// Preserve third-party licenses/notices and verify the final release archive.
+apply from: '../../gradle/third-party-notices.gradle'
+
+// Exclude deprecated YouTube authentication and check the final archive.
+apply from: '../../gradle/audio-sources.gradle'
+
+// Share the tested resolver, Spotify matching and SoundCloud AAC implementation with the mod.
+def sharedAudio = tasks.register('sharedAudio', Sync) {
+    from('../../fabric/26.3/src/main/java') {
+        include 'com/eyecrasher/lazodiscs/voice/AudioLoadExecutor.java'
+        include 'com/eyecrasher/lazodiscs/voice/AudioResolver.java'
+        include 'com/eyecrasher/lazodiscs/voice/LavaPcmFeeder.java'
+        include 'com/eyecrasher/lazodiscs/voice/SoundCloudAacSourceManager.java'
+        include 'com/eyecrasher/lazodiscs/voice/SpotifyTitleResolver.java'
+        include 'com/eyecrasher/lazodiscs/service/**'
+        include 'com/eyecrasher/lazodiscs/data/CustomDiscData.java'
+    }
+    into layout.buildDirectory.dir('generated/sources/sharedAudio')
+}
+def bukkitSources = tasks.register('bukkitSources', Sync) {
+    from('../../paper/26.3/src/main/java') {
+        include 'com/eyecrasher/lazodiscs/command/**'
+        include 'com/eyecrasher/lazodiscs/config/**'
+        include 'com/eyecrasher/lazodiscs/data/**'
+        include 'com/eyecrasher/lazodiscs/text/**'
+        filter { String line -> line }
+    }
+    from('../../paper/26.3/src/legacy/java') { exclude 'com/eyecrasher/lazodiscs/data/DiscSongs.java' }
+    into layout.buildDirectory.dir('generated/sources/bukkit')
+    doLast {
+        fileTree(destinationDir).matching { include '**/*.java' }.each { source ->
+            def text = source.text
+            text = text.replaceAll(/(player|sender|online)\s*\.sendMessage\(/, 'com.eyecrasher.lazodiscs.bukkit.Messages.send($1, ')
+            text = text.replaceAll(/event.getPlayer\(\)\s*\.sendMessage\(/, 'com.eyecrasher.lazodiscs.bukkit.Messages.send(event.getPlayer(), ')
+            text = text.replace('meta.displayName()', 'com.eyecrasher.lazodiscs.bukkit.Messages.displayName(meta)')
+            text = text.replace('meta.displayName(', 'com.eyecrasher.lazodiscs.bukkit.Messages.displayName(meta, ')
+            text = text.replace('new HashMap<>()', 'new java.util.concurrent.ConcurrentHashMap<>()')
+            if (source.name == 'LazoDiscsCommands.java') {
+                text = text.replace('plugin.onMain(', 'plugin.onPlayer(player, ')
+                text = text.replace('private void cancel(UUID player)', 'public void cancel(UUID player)')
+            }
+            if (source.name == 'LazoDiscsVoiceAddon.java') {
+                text = text.replace('return new Session(source, disc, finished);', 'return new Session(source, disc, reason -> plugin.onRegion(location, () -> finished.accept(reason)));')
+            }
+            if (source.name == 'JukeboxPlaybackManager.java') {
+                text = text.replace('plugin.onMain(() -> insertedThisTick.remove(player, key));', 'plugin.onRegion(jukebox.getLocation(), () -> insertedThisTick.remove(player, key));')
+                text = text.replace('Chunk chunk = event.getChunk();\n        plugin.onMain(', 'Chunk chunk = event.getChunk();\n        plugin.onRegion(new Location(chunk.getWorld(), chunk.getX() << 4, 0, chunk.getZ() << 4), ')
+                text = text.replace('plugin.onMain(\n                () -> {\n                    Block loaded = key.loadedBlock();', 'plugin.onRegion(block.getLocation(), \n                () -> {\n                    Block loaded = key.loadedBlock();')
+                text = text.replace('for (Chunk chunk : world.getLoadedChunks()) resume(chunk);', 'for (Chunk chunk : world.getLoadedChunks()) plugin.onRegion(new Location(world, chunk.getX() << 4, 0, chunk.getZ() << 4), () -> { if (chunk.isLoaded()) resume(chunk); });')
+                int start = text.indexOf('    private void notifyFailure(')
+                int end = text.indexOf('    /** Validate only', start)
+                text = text.substring(0, start) + '''
+    private void notifyFailure(Location location, CustomDiscData disc, String reason) {
+        double radius = Math.max(32, Math.min(disc.range(), 256));
+        for (var player : location.getWorld().getPlayers()) {
+            plugin.onPlayer(player, () -> {
+                if (player.getWorld().equals(location.getWorld()) && player.getLocation().distanceSquared(location) <= radius * radius)
+                    com.eyecrasher.lazodiscs.bukkit.Messages.send(player, LazoDiscsText.audioLoadFailed(disc.title(), reason).color(NamedTextColor.RED));
+            });
+        }
+    }
+
+''' + text.substring(end)
+                start = text.indexOf('    public void validate() {')
+                end = text.indexOf('    private void stop(Key key)', start)
+                text = text.substring(0, start) + '''
+    public void validate() {
+        active.forEach((key, expected) -> {
+            World world = Bukkit.getWorld(key.world);
+            if (world == null) { if (active.remove(key, expected)) expected.session.stop(); return; }
+            plugin.onRegion(new Location(world, key.x, key.y, key.z), () -> {
+                if (active.get(key) != expected) return;
+                Block block = key.loadedBlock();
+                if (block == null || !(block.getState() instanceof Jukebox jukebox)
+                        || DiscDataUtil.read(jukebox.getRecord()).filter(expected.disc::equals).isEmpty()) {
+                    if (active.remove(key, expected)) expected.session.stop();
+                }
+            });
+        });
+    }
+
+''' + text.substring(end)
+            }
+            source.text = text
+        }
+    }
+}
+sourceSets.main.java.setSrcDirs([sharedAudio, bukkitSources, 'src/main/java'])
+processResources {
+    from('../../fabric/26.3/src/main/resources') {
+        include 'lazodiscs_languages/**'
+        include 'assets/lazodiscs/textures/icons/discs.png'
+    }
+}
+
+apply from: '../../gradle/audio-errors.gradle'
+
+configurations { integrationApi }
+dependencies { integrationApi 'io.papermc.paper:paper-api:1.17.1-R0.1-SNAPSHOT' }
+sourceSets {
+    integrationTest {
+        compileClasspath = sourceSets.main.output + configurations.integrationApi + configurations.shade
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+tasks.named('compileIntegrationTestJava') { options.release = 16 }
+
+tasks.register('integrationPlugin', Jar) {
+    dependsOn integrationTestClasses
+    archiveFileName = 'lazodiscs-bukkit-integration.jar'
+    from sourceSets.integrationTest.output
+}
+
+apply from: '../../gradle/release-layout.gradle'

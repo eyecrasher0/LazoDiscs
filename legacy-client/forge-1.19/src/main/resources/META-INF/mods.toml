@@ -1,0 +1,22 @@
+modLoader="javafml"
+loaderVersion="[41,)"
+license="GPL-3.0-only"
+[[mods]]
+modId="lazodiscs_legacy_client"
+version="${version}"
+displayName="LazoDiscs Voice 1 Client"
+displayTest="IGNORE_ALL_VERSION"
+authors="EyeCrasher"
+description="Positional jukebox music for legacy Plasmo Voice servers."
+[[dependencies.lazodiscs_legacy_client]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.19,1.19.3)"
+ordering="NONE"
+side="CLIENT"
+[[dependencies.lazodiscs_legacy_client]]
+modId="plasmo_voice"
+mandatory=true
+versionRange="[1.2,2)"
+ordering="AFTER"
+side="CLIENT"

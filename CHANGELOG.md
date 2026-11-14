@@ -1,5 +1,16 @@
 # LazoDiscs Changelog
 
+## 1.0.8
+
+- Apply the YouTube sign-in error fix to every release: players receive “YouTube requires sign-in. Please try another link.”, the console gets a short warning, and unrelated failures retain their causes and diagnostic logs.
+- Prefer the newest compatible official stable Voice 2 release, including archived 2.0/2.1 targets. Add Voice 1 adapters where no compatible Voice 2 distribution can run.
+- Add missing Fabric/Forge Minecraft 1.17/1.18/1.18.1 targets where those loaders exist, Fabric 1.20.5/1.20.6, and the Voice-compatible 1.21 patch targets.
+- Add a universal Bukkit plugin for Spigot, Purpur, Folia and additional Paper versions. Preserve the native Paper distribution and silent-song registry for existing Paper upgrades.
+- Voice 1 listeners need the matching client mod. Add small Fabric/Forge client helpers for Bukkit 1.16.5 and 1.19/1.19.1; use Voice 1's own audio engine, decoder and volume controls.
+- Update the YouTube source snapshot, Jackson, Gson, JSON-java, Commons Codec, Rhino, Fabric Loader/API, and compatible Forge/NeoForge pins. Retain Rhino 1.7.15.1 on Java 8; validate old JVMs with executable audio and JavaScript checks.
+- Share the error classifier and legacy transports, bound custom audio packets, and clean up filters, pending loads, audio sources and command aliases during shutdown.
+- Publish an exact dependency matrix and pinned upstream server builds, with reproducible build, binary linkage, JVM audio and disposable server checks.
+
 ## [1.0.7 Paper] - 2026-11-10
 
 ### Added

@@ -1,6 +1,7 @@
 package com.eyecrasher.lazodiscs.command;
 
 import com.eyecrasher.lazodiscs.LazoDiscs;
+import com.eyecrasher.lazodiscs.voice.YoutubeLoginFailure;
 import com.eyecrasher.lazodiscs.config.LazoDiscsConfig;
 import com.eyecrasher.lazodiscs.data.CustomDiscData;
 import com.eyecrasher.lazodiscs.data.DiscDataUtil;
@@ -172,7 +173,7 @@ public final class LazoDiscsCommands implements Listener {
                                 Thread.currentThread().interrupt();
                             } catch (Exception | LinkageError error) {
                                 LazoDiscs.LOGGER.warn(
-                                        "Could not burn '{}': {}", url, error.toString());
+                                        "Could not burn '{}': {}", url, (YoutubeLoginFailure.matches(error) ? LazoDiscsText.youtubeLoginRequired() : error.toString()));
                                 fail(
                                         player,
                                         work,

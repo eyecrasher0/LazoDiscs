@@ -1,0 +1,7 @@
+// Large verification matrices can keep disposable outputs off the source volume.
+def outputRoot = providers.gradleProperty('lazoOutputRoot').orNull
+if (outputRoot != null) {
+    def family = projectDir.parentFile.name
+    def target = family == 'paper' ? providers.gradleProperty('minecraftTarget').getOrElse('26.3') : projectDir.name
+    layout.buildDirectory = file("${outputRoot}/${family}/${target}")
+}

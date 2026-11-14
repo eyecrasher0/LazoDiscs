@@ -1,0 +1,20 @@
+{
+  "component": "JvmDowngrader Java API stubs",
+  "version": "2.0.1",
+  "source_revision": "3a561342fb09fbb19022e0f910d765e51e9711e9",
+  "upstream": "https://github.com/unimined/JvmDowngrader",
+  "modifications": "Only required API stubs are bundled; packages are relocated per mod by the upstream shade task. No upstream source changes.",
+  "relinking": "Complete mod/build sources and the Java 17 intermediate JAR are preserved so users can rebuild/replace the helpers.",
+  "files": [
+    {
+      "name": "JvmDowngrader-2.0.1-NOTICE",
+      "source": "https://raw.githubusercontent.com/unimined/JvmDowngrader/3a561342fb09fbb19022e0f910d765e51e9711e9/LICENSE.md",
+      "sha256": "aa3a5316d23224dbd3c233bfc7725a9f32abeef982864139b97541d088bb2660"
+    },
+    {
+      "name": "JvmDowngrader-2.0.1-LGPL-2.1",
+      "source": "https://raw.githubusercontent.com/unimined/JvmDowngrader/3a561342fb09fbb19022e0f910d765e51e9711e9/license/LGPLv2.1.md",
+      "sha256": "418ee1f9bb12ffb4729abf75a7b2d57e668969f0c1728e707ddcffdff3bf4d89"
+    }
+  ]
+}

@@ -132,7 +132,7 @@ public final class PlasmoVoiceBridge {
                     "Failed to resolve entity by id {} in {}: {}",
                     entityId,
                     dimensionId(level),
-                    t.toString());
+                    (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
         }
 
         if (rawEntity instanceof ServerPlayer player) {
@@ -145,7 +145,7 @@ public final class PlasmoVoiceBridge {
                 LazoDiscs.LOGGER.debug(
                         "Failed to get Plasmo McServerEntity for player {}: {}",
                         player.getName().getString(),
-                        t.toString());
+                        (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
             }
         } else if (rawEntity != null) {
             try {
@@ -154,7 +154,7 @@ public final class PlasmoVoiceBridge {
                 LazoDiscs.LOGGER.debug(
                         "Failed to get Plasmo McServerEntity for entity {}: {}",
                         rawEntity,
-                        t.toString());
+                        (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
             }
         }
 
@@ -290,7 +290,7 @@ public final class PlasmoVoiceBridge {
                                             "Failed to start streaming LazoDisc entity audio"
                                                     + " (entityId={}): {}",
                                             entityId,
-                                            t.toString());
+                                            (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
                                     notifyLoadFailure(
                                             level,
                                             BlockPos.containing(initialPos),
@@ -458,7 +458,7 @@ public final class PlasmoVoiceBridge {
                                             "Failed to start streaming LazoDisc fallback static"
                                                     + " audio at {}: {}",
                                             pos,
-                                            t.toString());
+                                            (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
                                 }
                                 stopped.set(true);
                                 cleanup.run();
@@ -687,7 +687,7 @@ public final class PlasmoVoiceBridge {
                                     LazoDiscs.LOGGER.warn(
                                             "Failed to start streaming LazoDisc audio at {}: {}",
                                             pos.toShortString(),
-                                            t.toString());
+                                            (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
 
                                     notifyLoadFailure(level, pos, disc, messageOf(t));
                                 }
@@ -802,6 +802,7 @@ public final class PlasmoVoiceBridge {
     }
 
     private static String messageOf(Throwable t) {
+        if (YoutubeLoginFailure.matches(t)) return LazoDiscsText.youtubeLoginRequired();
         if (t == null) {
             return LazoDiscsText.unknown();
         }
@@ -971,7 +972,7 @@ public final class PlasmoVoiceBridge {
                 stopped.set(true);
 
                 LazoDiscs.LOGGER.warn(
-                        "Failed to provide LazoDisc streaming frame: {}", t.toString());
+                        "Failed to provide LazoDisc streaming frame: {}", (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
 
                 return AudioFrameResult.Finished.INSTANCE;
             }

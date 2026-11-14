@@ -1,0 +1,8 @@
+{
+  "voiceOverrides": {
+    "fabric/1.17": {
+      "versionId": "dxRYB81W",
+      "reason": "Voice 1.2.12 and newer require Fabric API >=0.41.0, whose Minecraft range excludes 1.17. Use official Voice 1.2.11 with the newest official Fabric API for 1.17; do not override loader dependencies."
+    }
+  }
+}

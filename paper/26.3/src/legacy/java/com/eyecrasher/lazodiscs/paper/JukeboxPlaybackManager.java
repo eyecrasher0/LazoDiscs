@@ -260,7 +260,7 @@ public final class JukeboxPlaybackManager implements Listener {
         // Old CraftBukkit implementations do not consistently send the record-stop event
         // or notify neighboring hoppers when their native playing flag changes.
         jukebox.getWorld()
-                .playEffect(jukebox.getLocation(), org.bukkit.Effect.RECORD_PLAY, Material.AIR);
+                .playEffect(jukebox.getLocation(), org.bukkit.Effect.RECORD_PLAY, 0);
         for (var face :
                 java.util.List.of(
                         org.bukkit.block.BlockFace.DOWN,

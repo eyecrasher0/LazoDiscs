@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.eyecrasher.lazodiscs.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "lazodiscs.refmap.json",
+  "mixins": [
+    "JukeboxBlockEntityMixin",
+    "RecordItemMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

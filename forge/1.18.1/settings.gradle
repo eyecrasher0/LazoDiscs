@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories {
+        maven {
+            url = 'https://maven.minecraftforge.net/'
+        }
+        maven {
+            url = 'https://repo.plasmoverse.com/releases'
+        }
+        maven {
+            url = 'https://repo.plo.su/'
+        }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'LazoDiscs'

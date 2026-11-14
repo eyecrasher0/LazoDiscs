@@ -49,3 +49,5 @@ audio.zero_samples = "Decoded audio contains no samples"
 audio.no_frames = "No audio frames were received from LavaPlayer for 15 seconds"
 audio.track_stuck = "Track got stuck for %threshold_ms% ms"
 audio.track_too_long = "Track is too long. Max: %max%"
+
+audio.youtube_login_required = "YouTube requires sign-in. Please try another link."

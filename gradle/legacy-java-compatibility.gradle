@@ -39,11 +39,13 @@ if (fabric) {
     }
     ext.lazoReleaseArchive = 'remapJar'
 } else {
-    tasks.named('reobfShadowJar') { enabled = false }
-    reobf { shadeDowngradedApi {} }
     ext.lazoReleaseArchive = 'shadeDowngradedApi'
-    ext.lazoReleasePreparationTasks = ['reobfShadeDowngradedApi']
-    tasks.named('assemble') { dependsOn 'reobfShadeDowngradedApi' }
+    if (plugins.hasPlugin('net.minecraftforge.gradle')) {
+        tasks.named('reobfShadowJar') { enabled = false }
+        reobf { shadeDowngradedApi {} }
+        ext.lazoReleasePreparationTasks = ['reobfShadeDowngradedApi']
+        tasks.named('assemble') { dependsOn 'reobfShadeDowngradedApi' }
+    }
 }
 tasks.named('assemble') { dependsOn tasks.named('shadeDowngradedApi') }
 

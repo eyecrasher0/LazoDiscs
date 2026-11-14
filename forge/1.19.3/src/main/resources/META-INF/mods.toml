@@ -1,7 +1,7 @@
 modLoader="javafml"
 loaderVersion="[44,)"
 license="GPL-3.0-only"
-issueTrackerURL="https://github.com/EyeCrasher07/LazoDiscs/issues"
+issueTrackerURL="https://github.com/eyecrasher0/LazoDiscs/issues"
 
 [[mods]]
 modId="lazodiscs"

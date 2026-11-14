@@ -11,19 +11,22 @@ import su.plo.voice.api.server.PlasmoVoiceServer;
 @Addon(
         id = "lazodiscs",
         name = "LazoDiscs",
-        version = "1.0.7+1.21.6",
+        version = "1.0.8+1.21.6",
         authors = {"EyeCrasher"})
 public final class LazoDiscsVoiceAddon implements AddonInitializer {
+    private final YoutubeLoginLogFilter youtubeLoginLogs = new YoutubeLoginLogFilter(message -> LazoDiscs.LOGGER.warn("{}", message));
     @InjectPlasmoVoice private PlasmoVoiceServer voiceServer;
 
     @Override
     public void onAddonInitialize() {
+        youtubeLoginLogs.install();
         PlasmoVoiceBridge.INSTANCE.initialize(voiceServer, this);
         LazoDiscs.LOGGER.info("LazoDiscs Plasmo Voice addon initialized");
     }
 
     @Override
     public void onAddonShutdown() {
+        youtubeLoginLogs.close();
         PlasmoVoiceBridge.INSTANCE.shutdown();
         LazoDiscs.playback().stopAll("pv-addon-shutdown");
         LazoDiscsDiscHandler.stopAll("pv-addon-shutdown");

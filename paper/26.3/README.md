@@ -13,7 +13,7 @@ recording, whose URL is saved on the disc.
 
 1. Run a [supported Paper version](../README.md#supported-targets) on its required Java version.
 2. Install the Paper build of [Plasmo Voice](https://modrinth.com/plugin/plasmo-voice).
-3. Put `lazodiscs-paper-1.0.7+<minecraft>.jar` in `plugins/` and restart the server.
+3. Put `lazodiscs-paper-1.0.8+<minecraft>.jar` in `plugins/` and restart the server.
 4. Players need the Plasmo Voice client mod to hear music. No LazoDiscs client mod
    or resource pack is needed. Configure Plasmo Voice's UDP connection as usual.
 
@@ -100,7 +100,7 @@ removed, pending commands cleared, aliases unregistered and loader workers stopp
 ## Установка
 
 Нужны [поддерживаемые Paper и Java](../README.md) и серверный плагин **Plasmo Voice**.
-Положи `lazodiscs-paper-1.0.7+<minecraft>.jar` в `plugins/` и перезапусти сервер.
+Положи `lazodiscs-paper-1.0.8+<minecraft>.jar` в `plugins/` и перезапусти сервер.
 Игрокам нужен клиентский Plasmo Voice; LazoDiscs на клиенте и ресурспак не требуются.
 
 Возьми одну обычную пластинку в основную руку:

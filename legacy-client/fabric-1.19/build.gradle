@@ -1,0 +1,10 @@
+plugins { id 'fabric-loom' version '1.13.6'; id 'java-library' }
+dependencies {
+    minecraft 'com.mojang:minecraft:1.19.2'
+    mappings loom.officialMojangMappings()
+    modImplementation 'net.fabricmc:fabric-loader:0.20.1'
+    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.77.0+1.19.2'
+}
+apply from: '../../gradle/legacy-client.gradle'
+
+apply from: '../../gradle/release-layout.gradle'

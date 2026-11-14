@@ -87,6 +87,7 @@ def main():
     parser.add_argument("--minecraft", choices=TARGETS, default="26.3")
     parser.add_argument("--java", default=str(Path(os.environ["JAVA_HOME"]) / "bin/java") if "JAVA_HOME" in os.environ else "java")
     parser.add_argument("--work-dir", type=Path, default=None)
+    parser.add_argument("--output-root", type=Path, help="External build-matrix output root")
     parser.add_argument("--plasmo", choices=PV, default="stable")
     args = parser.parse_args()
     target = TARGETS[args.minecraft]
@@ -95,8 +96,9 @@ def main():
     download(target["download"]["url"], cache / "paper.jar", "sha256", target["download"]["checksums"]["sha256"])
     url, digest = PV[args.plasmo]
     download(url, cache / f"pv-{args.plasmo}.jar", "sha512", digest)
-    release = MODULE / f"build/{args.minecraft}/libs/lazodiscs-paper-1.0.7+{args.minecraft}.jar"
-    fixture = MODULE / f"build/{args.minecraft}/libs/lazodiscs-paper-integration.jar"
+    directory = args.output_root.resolve() / "paper" / args.minecraft if args.output_root else MODULE / "build" / args.minecraft
+    release = directory / f"libs/lazodiscs-paper-1.0.8+{args.minecraft}.jar"
+    fixture = directory / "libs/lazodiscs-paper-integration.jar"
     if not release.is_file() or not fixture.is_file():
         raise RuntimeError("Run ./gradlew build integrationPlugin first")
     run = Path(tempfile.mkdtemp(prefix=f"run-{args.plasmo}-", dir=cache))

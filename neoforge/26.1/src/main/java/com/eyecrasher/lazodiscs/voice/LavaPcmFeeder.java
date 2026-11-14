@@ -76,7 +76,7 @@ public final class LavaPcmFeeder {
             LazoDiscs.LOGGER.info("LazoDiscs registered youtube-source for LavaPlayer ({})", label);
         } catch (Throwable t) {
             LazoDiscs.LOGGER.warn(
-                    "LazoDiscs could not register youtube-source ({}): {}", label, t.toString());
+                    "LazoDiscs could not register youtube-source ({}): {}", label, (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
         }
 
         try {
@@ -96,7 +96,7 @@ public final class LavaPcmFeeder {
             LazoDiscs.LOGGER.warn(
                     "LazoDiscs could not register default LavaPlayer source managers ({}): {}",
                     label,
-                    t.toString());
+                    (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
         }
         return manager;
     }
@@ -190,7 +190,7 @@ public final class LavaPcmFeeder {
             throw new RuntimeException(LazoDiscsText.searchTimedOut(timeout));
         }
         if (failure.get() != null) {
-            throw new RuntimeException(messageOf(failure.get()));
+            throw new RuntimeException(messageOf(failure.get()), failure.get());
         }
         if (metadata != null) {
             results.sort(
@@ -256,7 +256,7 @@ public final class LavaPcmFeeder {
             throw new RuntimeException(LazoDiscsText.audioResolveTimedOut(timeout));
         }
         if (failure.get() != null) {
-            throw new RuntimeException(messageOf(failure.get()));
+            throw new RuntimeException(messageOf(failure.get()), failure.get());
         }
         if (result.get() == null) {
             throw new RuntimeException(LazoDiscsText.audioNoMatches());
@@ -333,6 +333,7 @@ public final class LavaPcmFeeder {
     }
 
     private static String messageOf(Throwable t) {
+        if (YoutubeLoginFailure.matches(t)) return LazoDiscsText.youtubeLoginRequired();
         if (t == null) return LazoDiscsText.unknown();
         String message = t.getMessage();
         Throwable cause = t.getCause();

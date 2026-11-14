@@ -1,0 +1,18 @@
+def pv1Sources = tasks.register('pv1Sources', Sync) {
+    from('src/main/java') {
+        exclude 'com/eyecrasher/lazodiscs/LazoDiscsServerBootstrap.java'
+        exclude 'com/eyecrasher/lazodiscs/voice/PlasmoVoiceBridge.java'
+        exclude 'com/eyecrasher/lazodiscs/voice/LazoDiscsVoiceAddon.java'
+        exclude 'com/eyecrasher/lazodiscs/compat/sophisticatedbackpacks/LazoDiscsDiscHandler.java'
+    }
+    from('../../common/variants/pv1/java')
+    from("../../common/variants/pv1/${projectDir.parentFile.name}")
+    into layout.buildDirectory.dir('generated/sources/pv1')
+    doLast {
+        if (projectDir.parentFile.name == 'forge') {
+            def main = new File(destinationDir, 'com/eyecrasher/lazodiscs/LazoDiscs.java')
+            main.text = main.text.replace('public LazoDiscs() {', 'public LazoDiscs() {\n        com.eyecrasher.lazodiscs.voice.LegacyNetwork.initialize();')
+        }
+    }
+}
+sourceSets.main.java.setSrcDirs([pv1Sources, file('../../common/src/main/java')])

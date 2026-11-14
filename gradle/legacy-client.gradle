@@ -1,0 +1,45 @@
+version = '1.0.8+' + (projectDir.name.endsWith('1.16.5') ? '1.16.5' : '1.19-1.19.1')
+group = 'com.eyecrasher'
+def clientLoader = projectDir.name.startsWith('forge') ? 'forge' : 'fabric'
+base { archivesName = "lazodiscs-voice1-client-${clientLoader}" }
+java { toolchain.languageVersion = JavaLanguageVersion.of(17) }
+repositories { mavenCentral() }
+def clientSources = tasks.register('clientSources', Sync) {
+    from('../../common/src/main/java') {
+        include 'com/eyecrasher/lazodiscs/voice/LegacyAudioPacket.java'
+        include 'com/eyecrasher/lazodiscs/voice/LegacyClientAudio.java'
+        include 'com/eyecrasher/lazodiscs/voice/ReflectiveApi.java'
+    }
+    from("../../common/variants/pv1/${clientLoader}") { include '**/LegacyClient.java' }
+    if (clientLoader == 'forge') from('../../common/variants/legacy-client-forge/java')
+    into layout.buildDirectory.dir('generated/sources/client')
+    doLast {
+        fileTree(destinationDir).matching { include '**/*.java' }.each { source ->
+            def text = source.text.replace('modid = "lazodiscs"', 'modid = "lazodiscs_legacy_client"')
+            if (clientLoader == 'forge' && projectDir.name.endsWith('1.16.5')) {
+                [
+                    'net.minecraft.resources.ResourceLocation':'net.minecraft.util.ResourceLocation',
+                    'net.minecraftforge.network.':'net.minecraftforge.fml.network.',
+                    'net.minecraft.world.phys.Vec3':'net.minecraft.util.math.vector.Vector3d',
+                    'Vec3(':'Vector3d(',
+                    'net.minecraft.network.protocol.game.ServerboundCustomPayloadPacket':'net.minecraft.network.play.client.CCustomPayloadPacket',
+                    'new ServerboundCustomPayloadPacket':'new CCustomPayloadPacket',
+                    'net.minecraft.network.FriendlyByteBuf':'net.minecraft.network.PacketBuffer',
+                    'new FriendlyByteBuf':'new PacketBuffer'
+                ].each { before, after -> text = text.replace(before, after) }
+            }
+            source.text = text
+        }
+    }
+}
+sourceSets.main.java.srcDir(clientSources)
+processResources {
+    inputs.property 'version', project.version
+    filesMatching(['fabric.mod.json', 'META-INF/mods.toml']) { expand version: project.version }
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+tasks.withType(Jar).configureEach {
+    from('../../LICENSE')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}

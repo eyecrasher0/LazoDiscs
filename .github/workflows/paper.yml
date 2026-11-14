@@ -1,9 +1,9 @@
 name: Paper compatibility
 on:
   push:
-    paths: ['paper/**', 'fabric/26.3/**', 'gradle/**', '.github/workflows/paper.yml']
+    paths: ['paper/**', 'fabric/26.3/**', 'gradle/**', 'common/**', '.github/workflows/paper.yml']
   pull_request:
-    paths: ['paper/**', 'fabric/26.3/**', 'gradle/**', '.github/workflows/paper.yml']
+    paths: ['paper/**', 'fabric/26.3/**', 'gradle/**', 'common/**', '.github/workflows/paper.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -96,7 +96,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: lazodiscs-paper-${{ matrix.target.minecraft }}
-          path: paper/26.3/build/${{ matrix.target.minecraft }}/libs/lazodiscs-paper-1.0.7+${{ matrix.target.minecraft }}.jar
+          path: paper/26.3/build/${{ matrix.target.minecraft }}/libs/lazodiscs-paper-1.0.8+${{ matrix.target.minecraft }}.jar
       - name: Upload verification logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

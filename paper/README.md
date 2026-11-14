@@ -1,10 +1,10 @@
-# LazoDiscs 1.0.7 — Paper
+# LazoDiscs 1.0.8 — Paper
 
 [English](#installation) · [Русский](#установка)
 
 Record music links onto vanilla Minecraft discs and play positional audio through
 Plasmo Voice. YouTube, YouTube Music, SoundCloud, Spotify track matching and direct
-audio URLs use the same audio engine as the 1.0.7 mod builds.
+audio URLs use the same audio engine as the 1.0.8 mod builds.
 
 ## Installation
 
@@ -14,8 +14,8 @@ audio URLs use the same audio engine as the 1.0.7 mod builds.
 4. Restart the server. Players need the **Plasmo Voice client mod** and a working
    voice connection. They do not need a LazoDiscs client mod or a resource pack.
 
-This release targets **Paper**. Spigot, Folia and third-party forks have not been
-verified. Use the shaded release JAR, not `-thin`, `-sources` or `-integration` files.
+This directory describes the **native Paper** distribution. The separate
+[Bukkit adapter](../docs/compatibility-1.0.8.md) covers Spigot, Purpur, Folia and additional Paper versions. Use the shaded release JAR, not `-thin`, `-sources` or `-integration` files.
 
 ## Supported targets
 
@@ -33,11 +33,12 @@ standalone 1.21.2 or 26.1 server builds, so they are not advertised here.
 | 26.1.1, 26.1.2, 26.2 | 25 | Silent song datapack |
 | 26.3 | 25 | Song registry |
 
-Files are named `lazodiscs-paper-1.0.7+<minecraft>.jar`.
+Files are named `lazodiscs-paper-1.0.8+<minecraft>.jar`.
 
-Paper 1.16.5 is not included: stock Paper requires Java 16 or older, while the
-current Plasmo Voice server plugin requires Java 17. This release does not require
-a Java-version override or a modified dependency.
+Paper 1.16.5 uses the separate Bukkit adapter with Voice 1 and Java 16.
+The [full compatibility guide](../docs/compatibility-1.0.8.md) includes all 32 Paper
+targets and links their exact Voice dependencies. Native Paper targets below retain
+Voice 2 and their existing silent-song migration behavior.
 
 ## Commands and permissions
 
@@ -110,7 +111,7 @@ of public music services.
 ## Установка
 
 Нужны Paper точной версии из таблицы, указанная версия Java и серверный
-**Plasmo Voice 2.1.17**. Положи `lazodiscs-paper-1.0.7+<версия>.jar` в `plugins/`
+**Plasmo Voice 2.1.17**. Положи `lazodiscs-paper-1.0.8+<версия>.jar` в `plugins/`
 и перезапусти сервер. Игрокам нужен только клиентский Plasmo Voice.
 
 Держи одну пластинку в основной руке: `/lazodisc burn <ссылка> [название]` — запись,

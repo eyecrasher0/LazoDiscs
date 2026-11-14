@@ -1,0 +1,16 @@
+plugins { id 'xyz.wagyourtail.jvmdowngrader' version '2.0.1'; id 'com.gradleup.shadow' version '8.3.11'; id 'fabric-loom' version '1.13.6'; id 'java-library' }
+dependencies {
+    minecraft 'com.mojang:minecraft:1.16.5'
+    mappings loom.officialMojangMappings()
+    modImplementation 'net.fabricmc:fabric-loader:0.20.1'
+    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.42.0+1.16'
+}
+apply from: '../../gradle/legacy-client.gradle'
+
+apply from: '../../gradle/release-layout.gradle'
+
+// The client transport embeds no game or Voice implementation.
+shadowJar { configurations = []; archiveClassifier.set('java17') }
+jar { archiveClassifier.set('thin') }
+ext.lazoTargetJava = 8
+apply from: '../../gradle/legacy-java-compatibility.gradle'

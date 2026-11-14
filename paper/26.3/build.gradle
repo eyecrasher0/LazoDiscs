@@ -12,7 +12,7 @@ def legacyTarget = !minecraftTarget.startsWith('26.') && (
 def useSongDatapack = !legacyTarget && minecraftTarget != '26.3'
 def descriptorApi = javaTarget < 21 ? minecraftTarget.tokenize('.').take(2).join('.') : minecraftTarget
 def paperApi = targets[minecraftTarget].api
-version = "1.0.7+${minecraftTarget}"
+version = "1.0.8+${minecraftTarget}"
 layout.buildDirectory = layout.projectDirectory.dir("build/${minecraftTarget}")
 group = 'com.eyecrasher'
 
@@ -49,9 +49,14 @@ configurations {
     shade
     shadeRuntime
     implementation.extendsFrom(shade)
+    // Resolve private Gson once; transitive audio/UI copies must not precede it.
+    shade.resolutionStrategy.force 'com.google.code.gson:gson:2.15.0'
 }
 
 dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1'
+    testImplementation 'org.apache.logging.log4j:log4j-core:2.26.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     compileOnly "io.papermc.paper:paper-api:${paperApi}"
     compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
 
@@ -69,7 +74,7 @@ dependencies {
 
     // Private libraries are relocated and kept off Minecraft's compile classpath.
     // The BOM aligns core/databind 2.21.7 with annotations 2.21.
-    shadeRuntime platform('com.fasterxml.jackson:jackson-bom:2.21.7')
+    shadeRuntime platform('com.fasterxml.jackson:jackson-bom:2.23.0')
     shadeRuntime 'com.fasterxml.jackson.core:jackson-core'
     shadeRuntime 'com.fasterxml.jackson.core:jackson-databind'
     shadeRuntime 'com.fasterxml.jackson.core:jackson-annotations'
@@ -78,9 +83,9 @@ dependencies {
     }
 
     // Security-patched audio transitives stay off Minecraft's compile graph.
-    shadeRuntime 'org.mozilla:rhino:1.7.15.1'
-    shadeRuntime 'org.mozilla:rhino-engine:1.7.15.1'
-    shadeRuntime 'org.json:json:20260719'
+    shadeRuntime 'org.mozilla:rhino:1.9.2'
+    shadeRuntime 'org.mozilla:rhino-engine:1.9.2'
+    shadeRuntime 'org.json:json:20260814'
     shadeRuntime 'commons-io:commons-io:2.22.0'
     shadeRuntime 'commons-codec:commons-codec:1.23.0'
     shadeRuntime 'com.google.code.gson:gson:2.15.0'
@@ -99,7 +104,7 @@ dependencies {
         exclude group: 'org.mozilla'
         exclude group: 'org.json'
     }
-    shade('dev.lavalink.youtube:v2:2be8e542d3f6f178e048dca565892684c2e40177-SNAPSHOT') {
+    shade('dev.lavalink.youtube:v2:e41dd95f8bd134b51e75080fb28cc805fecb431a-SNAPSHOT') {
         exclude group: 'org.slf4j', module: 'slf4j-api'
         exclude group: 'commons-io', module: 'commons-io'
         exclude group: 'commons-codec', module: 'commons-codec'
@@ -259,3 +264,13 @@ tasks.register('integrationPlugin', Jar) {
     archiveFileName = 'lazodiscs-paper-integration.jar'
     from sourceSets.integrationTest.output
 }
+
+apply from: '../../gradle/audio-errors.gradle'
+
+sourceSets.test.compileClasspath += configurations.compileClasspath
+test {
+    useJUnitPlatform()
+    classpath += configurations.compileClasspath + configurations.shadeRuntime
+}
+
+apply from: '../../gradle/release-layout.gradle'
