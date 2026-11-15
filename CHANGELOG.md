@@ -9,6 +9,7 @@
 - Voice 1 listeners need the matching client mod. Add small Fabric/Forge client helpers for Bukkit 1.16.5 and 1.19/1.19.1; use Voice 1's own audio engine, decoder and volume controls.
 - Update the YouTube source snapshot, Jackson, Gson, JSON-java, Commons Codec, Rhino, Fabric Loader/API, and compatible Forge/NeoForge pins. Retain Rhino 1.7.15.1 on Java 8; validate old JVMs with executable audio and JavaScript checks.
 - Share the error classifier and legacy transports, bound custom audio packets, and clean up filters, pending loads, audio sources and command aliases during shutdown.
+- Keep first playback reliable on older Forge when a jukebox replaces a pending load; recreate Voice 1 client sources after changing the sound output device.
 - Publish an exact dependency matrix and pinned upstream server builds, with reproducible build, binary linkage, JVM audio and disposable server checks.
 
 ## [1.0.7 Paper] - 2026-11-10

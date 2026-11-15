@@ -19,9 +19,11 @@ public final class VoiceClient {
         public final Setting<Boolean> speakerMuted = new Setting<>(false);
     }
     public static final class Engine {
+        public long context = 1;
         public final List<Source> sources = new ArrayList<>();
         private final List<Runnable> pending = new ArrayList<>();
         public void runInContext(Runnable action) { pending.add(action); }
+        public long getContextPointer() { return context; }
         public Source createSource() { Source source=new Source();sources.add(source);return source; }
         public void flush() { var work=List.copyOf(pending);pending.clear();work.forEach(Runnable::run); }
     }

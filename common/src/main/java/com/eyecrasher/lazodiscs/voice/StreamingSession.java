@@ -62,7 +62,7 @@ public final class StreamingSession implements AutoCloseable {
                 if (!closed.get()) finish("Audio loading interrupted", false);
             } catch (Exception | LinkageError error) { fail(error); }
         }, () -> finish(LazoDiscsText.audioLoadBusy(), false));
-        if (closed.get()) load.cancel(true);
+        if (closed.get()) load.cancel(false);
     }
     private void tick() {
         if (closed.get()) return;
@@ -87,7 +87,10 @@ public final class StreamingSession implements AutoCloseable {
         if (!closed.compareAndSet(false, true)) return;
         ACTIVE.remove(this);
         synchronized (this) {
-            if (manual && load != null) load.cancel(true);
+            // Forge reads mod classes through a shared interruptible archive channel.
+            // Interrupting a first load can close that channel for the whole mod.
+            // Closed checks discard late results; the resolver already has a timeout.
+            if (manual && load != null) load.cancel(false);
             if (sender != null) sender.cancel(false);
             try { if (playback != null) playback.close(); }
             catch (RuntimeException | LinkageError error) { LazoDiscs.LOGGER.warn("Could not close audio decoder", error); }

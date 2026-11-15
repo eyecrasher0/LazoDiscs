@@ -13,6 +13,7 @@ class LegacyClientAudioTest {
     private final VoiceClient.Engine engine=VoiceClient.ENGINE;
     @BeforeEach void setup() {
         LegacyClientAudio.prune(false);engine.flush();engine.sources.clear();
+        engine.context=1;
         VoiceClient.CONFIG.voiceVolume.value=1.0;VoiceClient.CONFIG.speakerMuted.value=false;
         OpusDecoder.opened=0;OpusDecoder.closed=0;
     }
@@ -51,5 +52,16 @@ class LegacyClientAudioTest {
         for(int i=0;i<40;i++)accept(frame(UUID.randomUUID(),0));engine.flush();
         assertEquals(32,engine.sources.size());assertEquals(32,OpusDecoder.opened);
         LegacyClientAudio.prune(false);engine.flush();assertEquals(32,OpusDecoder.closed);
+    }
+    @Test void restartingVoiceSoundContextRecreatesSourcesWithoutDeletingReusedIds() {
+        UUID id=UUID.randomUUID();accept(frame(id,0));engine.flush();
+        var previous=engine.sources.get(0);
+        org.lwjgl.openal.AL.capabilities=new Object();accept(frame(id,1));engine.flush();
+        assertEquals(2,engine.sources.size());assertEquals(1,previous.writes);
+        assertFalse(previous.closed,"The destroyed context's source ID can belong to another sound now");
+        assertEquals(1,engine.sources.get(1).writes);assertEquals(1,OpusDecoder.closed);
+        engine.context=0;LegacyClientAudio.prune(true);engine.flush();
+        assertEquals(2,OpusDecoder.closed);
+        accept(frame(id,2));engine.flush();assertEquals(2,engine.sources.size());
     }
 }

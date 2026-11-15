@@ -25,6 +25,8 @@ def main():
     folder=(args.work_root/platform/mc).resolve();folder.mkdir(parents=True,exist_ok=True)
     lock=(folder/'test.lock').open('a')
     fcntl.flock(lock,fcntl.LOCK_EX | fcntl.LOCK_NB)
+    if (folder/'result.json').exists():
+        (folder/'result.json').replace(folder/'result-previous.json')
     module=ROOT/platform/mc;build=(module/'build.gradle').read_text();installer_java=args.installer_java or args.java
     run=folder/'server';run.mkdir(exist_ok=True)
     if platform=='fabric':
@@ -54,7 +56,9 @@ def main():
         audio.download(api['url'],mods/'FabricApi.jar','sha512',api['sha512'])
     (run/'eula.txt').write_text('eula=true\n')
     with socket.socket() as available:available.bind(('127.0.0.1',0));port=available.getsockname()[1]
-    (run/'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={port}\nonline-mode=false\nenforce-secure-profile=false\nlevel-type=flat\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nallow-nether=false\npause-when-empty-seconds=-1\n')
+    # A reused recorded world preloads mod classes and can hide first-load races.
+    world='fixture-'+uuid.uuid4().hex
+    (run/'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={port}\nlevel-name={world}\nonline-mode=false\nenforce-secure-profile=false\nlevel-type=flat\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nallow-nether=false\npause-when-empty-seconds=-1\n')
     config=run/'config/lazodiscs';config.mkdir(parents=True,exist_ok=True)
     (config/'config.toml').write_text('[security]\nallowHttp = true\nallowHttps = true\nallowedDomains = []\n')
     if voice['generation']==1:
@@ -97,7 +101,7 @@ def main():
         time.sleep(5);send('data get block 0 80 0');time.sleep(1);send('stop')
         code=process.wait(timeout=60);reader.join(timeout=5)
         if code:raise RuntimeError(f'Mod server exited {code}: {log}')
-        result={'platform':platform,'minecraft':mc,'sha256':digest,'voice':voice['version'],'ready':True,'audio_requests':requested,'exit':code,'log':str(log),'scope':'Real final-JAR loader/Mixin startup and persisted jukebox HTTP audio load; no client listening assertion'}
+        result={'platform':platform,'minecraft':mc,'sha256':digest,'voice':voice['version'],'fresh_world':world,'ready':True,'audio_requests':requested,'exit':code,'log':str(log),'scope':'Real final-JAR loader/Mixin startup and first persisted jukebox HTTP audio load in a fresh world; no client listening assertion'}
         (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
     finally:
         if process is not None and process.poll() is None:

@@ -23,6 +23,10 @@ public final class LegacyClientAudio {
             ReflectiveApi.call(engine, "runInContext", (Runnable) () -> {
                 synchronized (CHANNELS) {
                     try {
+                        long context = ((Number) ReflectiveApi.call(engine, "getContextPointer")).longValue();
+                        Object capabilities = capabilities(context);
+                        discardInvalidContexts(engine, context, capabilities);
+                        if (context == 0) return;
                         Channel channel = CHANNELS.get(packet.source);
                         if (packet.kind == LegacyAudioPacket.STOP || !world.equals(packet.world)) {
                             if (channel != null) { channel.close(); CHANNELS.remove(packet.source); }
@@ -35,7 +39,7 @@ public final class LegacyClientAudio {
                             Class<?> recorder = Class.forName("su.plo.voice.client.sound.Recorder");
                             int rate = ((Number) recorder.getMethod("getSampleRate").invoke(null)).intValue();
                             Object decoder = Class.forName("su.plo.voice.client.sound.opus.OpusDecoder").getConstructor(int.class, int.class, int.class).newInstance(rate, rate / 50 * 2, 4096);
-                            channel = new Channel(source, decoder);
+                            channel = new Channel(source, decoder, engine, context, capabilities);
                             ReflectiveApi.call(source, "setRelative", false);
                             ReflectiveApi.call(source, "setLooping", false);
                             CHANNELS.put(packet.source, channel);
@@ -69,18 +73,50 @@ public final class LegacyClientAudio {
             Object engine = Class.forName("su.plo.voice.client.VoiceClient").getMethod("getSoundEngine").invoke(null);
             ReflectiveApi.call(engine, "runInContext", (Runnable) () -> {
                 synchronized (CHANNELS) {
+                    long context = ((Number) ReflectiveApi.call(engine, "getContextPointer")).longValue();
+                    Object capabilities;
+                    try { capabilities = capabilities(context); }
+                    catch (ReflectiveOperationException error) { failure(error); return; }
+                    discardInvalidContexts(engine, context, capabilities);
                     CHANNELS.entrySet().removeIf(entry -> {
                         if (connected && System.nanoTime() - entry.getValue().lastFrame < 2_000_000_000L) return false;
                         entry.getValue().close(); return true;
                     });
                 }
             });
-        } catch (ReflectiveOperationException | RuntimeException unavailable) { synchronized (CHANNELS) { CHANNELS.clear(); } }
+        } catch (ReflectiveOperationException | RuntimeException unavailable) {
+            synchronized (CHANNELS) {
+                for (Channel channel : CHANNELS.values()) channel.closeDecoder();
+                CHANNELS.clear();
+            }
+        }
+    }
+    private static Object capabilities(long context) throws ReflectiveOperationException {
+        // LWJGL replaces this identity on context creation even if OpenAL reuses
+        // the same native pointer address for the new context.
+        return context == 0 ? null : Class.forName("org.lwjgl.openal.AL").getMethod("getCapabilities").invoke(null);
+    }
+    private static void discardInvalidContexts(Object engine, long context, Object capabilities) {
+        CHANNELS.entrySet().removeIf(entry -> {
+            Channel channel = entry.getValue();
+            if (channel.engine == engine && channel.context == context && channel.capabilities == capabilities) return false;
+            // Voice destroyed the old OpenAL context. Its numeric source IDs can now
+            // belong to unrelated sounds; only the independent decoder is ours to close.
+            channel.closeDecoder();
+            return true;
+        });
     }
     private static final class Channel {
-        final Object source, decoder;
+        final Object source, decoder, engine, capabilities;
+        final long context;
         long sequence = -1, lastFrame = System.nanoTime();
-        Channel(Object source, Object decoder) { this.source = source; this.decoder = decoder; }
-        void close() { try { ReflectiveApi.call(source, "close"); } finally { ReflectiveApi.call(decoder, "close"); } }
+        Channel(Object source, Object decoder, Object engine, long context, Object capabilities) {
+            this.source = source; this.decoder = decoder; this.engine = engine; this.context = context; this.capabilities = capabilities;
+        }
+        void closeDecoder() {
+            try { ReflectiveApi.call(decoder, "close"); }
+            catch (RuntimeException error) { failure(error); }
+        }
+        void close() { try { ReflectiveApi.call(source, "close"); } finally { closeDecoder(); } }
     }
 }
