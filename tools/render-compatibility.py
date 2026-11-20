@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Update the release guide's dependency table from its reviewed compatibility manifest."""
 import json
+import re
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=ROOT/'docs/compatibility-1.0.8.md';text=p.read_text();manifest=json.loads((ROOT/'compatibility.json').read_text())
+text=re.sub(r'on \d{4}-\d{2}-\d{2}\.', 'on '+manifest['asOf']+'.', text, count=1)
 platforms=['paper','spigot','purpur','folia','fabric','forge','neoforge'];rows={(r['minecraft'],r['platform']):r for r in manifest['entries']}
 start=text.index('| Minecraft |');end=text.index('\n## Choosing',start)
 table='| Minecraft | Paper | Spigot | Purpur | Folia | Fabric | Forge | NeoForge |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n'

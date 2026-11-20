@@ -21,7 +21,9 @@ public final class AudioLoadExecutor {
 
     public static Future<?> submit(Runnable task) {
         synchronized (LOCK) {
-            return executor().submit(task);
+            AudioLoadTask load = new AudioLoadTask(task);
+            executor().execute(load);
+            return load;
         }
     }
 

@@ -6,9 +6,6 @@ pluginManagement {
         maven {
             url = 'https://repo.plasmoverse.com/releases'
         }
-        maven {
-            url = 'https://repo.plo.su/'
-        }
         gradlePluginPortal()
     }
 }

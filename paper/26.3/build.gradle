@@ -32,9 +32,6 @@ repositories {
         url = 'https://repo.plasmoverse.com/releases'
     }
     maven {
-        url = 'https://repo.plo.su/'
-    }
-    maven {
         url = 'https://maven.lavalink.dev/releases'
     }
     maven {

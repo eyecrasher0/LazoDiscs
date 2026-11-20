@@ -46,3 +46,27 @@ def verifyAudioSources = tasks.register('verifyAudioSources') {
     }
 }
 tasks.named('check') { dependsOn verifyAudioSources }
+
+// A successful compile or WAV playback cannot detect an excluded relocated JSON
+// dependency. Execute both private implementations from the archive we deliver.
+def jsonProbeClasses = layout.buildDirectory.dir('verification/packaged-json/classes')
+def compilePackagedJsonProbe = tasks.register('compilePackagedJsonProbe', JavaCompile) {
+    source = files(file('../../tools/java/PackagedJsonSmoke.java'))
+    classpath = files()
+    destinationDirectory = jsonProbeClasses
+    options.release = 8
+    options.encoding = 'UTF-8'
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(25) }
+}
+def verifyPackagedJson = tasks.register('verifyPackagedJson', JavaExec) {
+    group = 'verification'
+    description = 'Round-trips track metadata using Gson and Jackson from the final release JAR.'
+    dependsOn releaseArchive, compilePackagedJsonProbe
+    if (project.hasProperty('lazoReleasePreparationTasks')) dependsOn project.lazoReleasePreparationTasks
+    inputs.file(releaseArchive.flatMap { it.archiveFile })
+    classpath = files(jsonProbeClasses, releaseArchive.flatMap { it.archiveFile })
+    mainClass = 'PackagedJsonSmoke'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    doFirst { args = [releaseArchive.get().archiveFile.get().asFile.absolutePath] }
+}
+tasks.named('check') { dependsOn verifyPackagedJson }

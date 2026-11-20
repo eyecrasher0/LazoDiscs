@@ -1,7 +1,7 @@
 # LazoDiscs 1.0.8 compatibility
 
 The table selects the newest compatible **official stable Plasmo Voice** compatible with each
-Minecraft/platform pair on 2026-11-14. A cell links to that exact dependency.
+Minecraft/platform pair on 2026-11-20. A cell links to that exact dependency.
 `—` means no supported combination. The machine-readable checksums, Java requirements
 and exclusions are in [compatibility.json](../compatibility.json).
 

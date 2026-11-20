@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pin official Voice releases and exclude platform/version combinations without an upstream build."""
 import json
+import datetime
 from pathlib import Path
 import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +46,7 @@ def resolve():
             if mc in ['1.17','1.17.1'] and (platform=='fabric' or generation=='1'): java=16
             if platform in ['paper','spigot','purpur'] and mc=='1.16.5': java=16
             entries.append({'platform':platform,'minecraft':mc,'java':java,'voice':{'id':row['id'],'version':row['version_number'],'generation':int(generation),'url':file['url'],'sha512':file['hashes']['sha512']},'clientLazoDiscsRequired':generation=='1'})
-    result={'release':'1.0.8','asOf':'2026-11-14','requestedMinecraftVersions':MC,'entries':entries,'excluded':excluded}
+    result={'release':'1.0.8','asOf':datetime.date.today().isoformat(),'requestedMinecraftVersions':MC,'entries':entries,'excluded':excluded}
     (ROOT/'compatibility.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
     print('Requested versions:',len(MC))
     for platform in ['fabric','forge','neoforge','paper','spigot','purpur','folia']:

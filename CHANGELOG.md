@@ -10,6 +10,7 @@
 - Update the YouTube source snapshot, Jackson, Gson, JSON-java, Commons Codec, Rhino, Fabric Loader/API, and compatible Forge/NeoForge pins. Retain Rhino 1.7.15.1 on Java 8; validate old JVMs with executable audio and JavaScript checks.
 - Share the error classifier and legacy transports, bound custom audio packets, and clean up filters, pending loads, audio sources and command aliases during shutdown.
 - Keep first playback reliable on older Forge when a jukebox replaces a pending load; recreate Voice 1 client sources after changing the sound output device.
+- Verify bundled Gson/Jackson with real JSON round trips from the final JAR, and use the current Plasmo dependency repository for clean builds.
 - Publish an exact dependency matrix and pinned upstream server builds, with reproducible build, binary linkage, JVM audio and disposable server checks.
 
 ## [1.0.7 Paper] - 2026-11-10

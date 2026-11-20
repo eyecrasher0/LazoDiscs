@@ -21,9 +21,6 @@ repositories {
         url = 'https://repo.plasmoverse.com/releases'
     }
     maven {
-        url = 'https://repo.plo.su/'
-    }
-    maven {
         url = 'https://maven.lavalink.dev/releases'
     }
     maven {
@@ -181,7 +178,6 @@ shadowJar {
     exclude 'org/slf4j/**'
     exclude 'org/apache/commons/io/**'
     exclude 'org/apache/commons/codec/**'
-    exclude 'com/google/gson/**'
     exclude 'com/google/common/**'
     exclude 'it/unimi/dsi/fastutil/**'
     exclude 'com/sun/jna/**'
