@@ -12,7 +12,15 @@ import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
-import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
+import com.sedmelluq.discord.lavaplayer.source.bandcamp.BandcampAudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.beam.BeamAudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.getyarn.GetyarnAudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.http.HttpAudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.local.LocalAudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.nico.NicoAudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.twitch.TwitchStreamAudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.vimeo.VimeoAudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.yamusic.YandexMusicAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
@@ -73,8 +81,18 @@ public final class LavaPcmFeeder {
         }
 
         try {
-            AudioSourceManagers.registerRemoteSources(manager);
-            AudioSourceManagers.registerLocalSource(manager);
+            // Register sources explicitly: LavaPlayer's helper also loads its legacy YouTube
+            // source, which is deliberately excluded from the distributed archive.
+            manager.registerSourceManager(new YandexMusicAudioSourceManager(true));
+            manager.registerSourceManager(new SoundCloudAacSourceManager());
+            manager.registerSourceManager(new BandcampAudioSourceManager());
+            manager.registerSourceManager(new VimeoAudioSourceManager());
+            manager.registerSourceManager(new TwitchStreamAudioSourceManager());
+            manager.registerSourceManager(new BeamAudioSourceManager());
+            manager.registerSourceManager(new GetyarnAudioSourceManager());
+            manager.registerSourceManager(new NicoAudioSourceManager());
+            manager.registerSourceManager(new HttpAudioSourceManager());
+            manager.registerSourceManager(new LocalAudioSourceManager());
         } catch (Throwable t) {
             LazoDiscs.LOGGER.warn(
                     "LazoDiscs could not register default LavaPlayer source managers ({}): {}",
@@ -210,7 +228,14 @@ public final class LavaPcmFeeder {
 
                     @Override
                     public void playlistLoaded(AudioPlaylist playlist) {
-                        if (playlist.getSelectedTrack() != null) {
+                        if (metadata != null) {
+                            AudioTrack selected = selectBestTrack(playlist.getTracks(), metadata);
+                            if (selected == null) {
+                                failure.set(new RuntimeException(LazoDiscsText.audioNoMatches()));
+                            } else {
+                                result.set(selected);
+                            }
+                        } else if (playlist.getSelectedTrack() != null) {
                             result.set(playlist.getSelectedTrack());
                         } else if (!playlist.getTracks().isEmpty()) {
                             result.set(selectBestTrack(playlist.getTracks(), metadata));
@@ -277,7 +302,7 @@ public final class LavaPcmFeeder {
         if (tracks.isEmpty()) return null;
         if (metadata == null) return tracks.get(0);
 
-        AudioTrack best = tracks.get(0);
+        AudioTrack best = null;
         int bestScore = Integer.MIN_VALUE;
         for (AudioTrack track : tracks) {
             int score = scoreTrack(track, metadata);
@@ -288,11 +313,14 @@ public final class LavaPcmFeeder {
                     info.title,
                     info.author,
                     info.length);
+            // Duration and artist hints must not select a completely different song.
+            if (!TrackMatchScorer.matchesTitle(info.title, metadata.title())) continue;
             if (score > bestScore) {
                 bestScore = score;
                 best = track;
             }
         }
+        if (best == null) return null;
         AudioTrackInfo info = best.getInfo();
         LazoDiscs.LOGGER.info(
                 "LazoDiscs selected Spotify candidate: '{}' by '{}' with score {}",

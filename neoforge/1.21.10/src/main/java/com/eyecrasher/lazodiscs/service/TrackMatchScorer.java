@@ -7,6 +7,23 @@ import java.util.Locale;
 public final class TrackMatchScorer {
     private TrackMatchScorer() {}
 
+    public static boolean matchesTitle(String rawTitle, String expectedTitle) {
+        if (expectedTitle == null) return false;
+        // Spotify adds release/version labels after the song name in some titles.
+        String expected =
+                normalize(
+                        expectedTitle.replaceFirst(
+                                "(?i)\\s+-\\s+(?:instrumental|sped up|slowed|bass boosted|remix|"
+                                        + "remaster(?:ed)?|live|acoustic|radio edit|original mix|"
+                                        + "karaoke|nightcore|extended|8d)(?:\\s|$).*",
+                                ""));
+        String actual = normalize(rawTitle);
+        if (expected.isBlank() || actual.isBlank()) return false;
+        if ((" " + actual + " ").contains(" " + expected + " ")) return true;
+        List<String> words = meaningfulWords(expected);
+        return !words.isEmpty() && List.of(actual.split(" ")).containsAll(words);
+    }
+
     public static int score(
             String rawTitle, String rawAuthor, long lengthMs, TrackMetadata metadata) {
         if (metadata == null) return 0;
