@@ -297,7 +297,7 @@ public final class LazoDiscsDiscHandler {
                                             + " sub-level and allowPlaybackOnSablePlatforms is"
                                             + " disabled in config.",
                                         disc.title(),
-                                        pos.toShortString());
+                                        pos.toString());
                                 return;
                             }
 
@@ -310,7 +310,7 @@ public final class LazoDiscsDiscHandler {
                             LazoDiscs.LOGGER.info(
                                     "SophisticatedCore Jukebox Upgrade (block at {}) requested"
                                             + " LazoDisc '{}'{}",
-                                    pos.toShortString(),
+                                    pos.toString(),
                                     disc.title(),
                                     dynamicPosition
                                             ? " (Sable dynamic position — per-tick updates enabled)"
@@ -349,7 +349,7 @@ public final class LazoDiscsDiscHandler {
                                 LazoDiscs.LOGGER.warn(
                                         "Failed to start LazoDiscs source for SophisticatedCore at"
                                                 + " {}: {}",
-                                        pos.toShortString(),
+                                        pos.toString(),
                                         t.toString());
                             }
                         });

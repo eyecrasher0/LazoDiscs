@@ -2,6 +2,8 @@
 
 ## 1.0.8
 
+- Prepare the first decoded frame before exposing cancellable playback, preventing cold-load archive failures on older Forge. Preserve the first frame and report decoding failures that arrive after playback starts.
+- Use server-safe position logging on Minecraft 1.16.5 and exclude compile annotations that otherwise cause NeoForge module conflicts.
 - Apply the YouTube sign-in error fix to every release: players receive “YouTube requires sign-in. Please try another link.”, the console gets a short warning, and unrelated failures retain their causes and diagnostic logs.
 - Prefer the newest compatible official stable Voice 2 release, including archived 2.0/2.1 targets. Add Voice 1 adapters where no compatible Voice 2 distribution can run.
 - Add missing Fabric/Forge Minecraft 1.17/1.18/1.18.1 targets where those loaders exist, Fabric 1.20.5/1.20.6, and the Voice-compatible 1.21 patch targets.

@@ -76,7 +76,8 @@ public final class LavaPcmFeeder {
             LazoDiscs.LOGGER.info("LazoDiscs registered youtube-source for LavaPlayer ({})", label);
         } catch (Throwable t) {
             LazoDiscs.LOGGER.warn(
-                    "LazoDiscs could not register youtube-source ({}): {}", label, (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
+                    "LazoDiscs could not register youtube-source ({}): {}", label, (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()),
+                                            (YoutubeLoginFailure.matches(t) ? null : t));
         }
 
         try {
@@ -96,13 +97,19 @@ public final class LavaPcmFeeder {
             LazoDiscs.LOGGER.warn(
                     "LazoDiscs could not register default LavaPlayer source managers ({}): {}",
                     label,
-                    (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()));
+                    (YoutubeLoginFailure.matches(t) ? LazoDiscsText.youtubeLoginRequired() : t.toString()),
+                                            (YoutubeLoginFailure.matches(t) ? null : t));
         }
         return manager;
     }
 
     public static StreamingPlayback openStream(String rawUrl, String title, float volume)
             throws InterruptedException {
+        return openStream(rawUrl, title, volume, null);
+    }
+
+    public static StreamingPlayback openStream(String rawUrl, String title, float volume,
+            java.util.function.Consumer<FriendlyException> playbackFailure) throws InterruptedException {
         // Stored or externally supplied disc data must obey current URL restrictions too.
         ResolveRequest request = resolveIdentifier(DiscDataUtil.validateUrl(rawUrl), title);
         LazoDiscs.LOGGER.info(
@@ -114,7 +121,7 @@ public final class LavaPcmFeeder {
 
         AudioPlayer player = PLAYER_MANAGER.createPlayer();
         player.setVolume(Math.max(0, Math.round(Math.max(0.0F, volume) * 100.0F)));
-        player.playTrack(track);
+        AudioPlaybackPreparation.start(player, track, playbackFailure);
         return new StreamingPlayback(player, track);
     }
 

@@ -4,7 +4,7 @@
 This exercises loader dependencies, Mixin application, item decoding and the server
 Voice adapter. It is not a client listening or full gameplay test.
 """
-import argparse,fcntl,hashlib,http.server,importlib.util,json,os,re,shutil,socket,subprocess,tempfile,threading,time,urllib.request,uuid,zipfile
+import argparse,fcntl,hashlib,http.server,importlib.util,io,json,os,re,shutil,socket,subprocess,tempfile,threading,time,urllib.request,uuid,wave,zipfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('audio_fixture',ROOT/'paper/26.3/tools/integration.py');audio=importlib.util.module_from_spec(spec);spec.loader.exec_module(audio)
@@ -75,7 +75,8 @@ def main():
     url=f'http://127.0.0.1:{fixture_http.server_port}/test.wav';disc='{url:"'+url+'",title:"Runtime fixture",range:64,volume:1.0f,id:"'+str(uuid.uuid4())+'"}'
     legacy=mc.startswith(('1.16.','1.17','1.18','1.19')) or mc in ['1.20','1.20.1','1.20.2','1.20.3','1.20.4']
     item='{id:"minecraft:music_disc_cat",Count:1b,tag:{lazodiscs:'+disc+'}}' if legacy else '{id:"minecraft:music_disc_cat",count:1,components:{"minecraft:custom_data":{lazodiscs:'+disc+'}}}'
-    lines=[];ready=threading.Event();log=folder/'console.log'
+    with wave.open(io.BytesIO(Fixture.audio)) as wav:fixture_seconds=wav.getnframes()/wav.getframerate()
+    lines=[];completed=[];ready=threading.Event();log=folder/'console.log'
     command=[args.java,'-XX:ActiveProcessorCount=2','-Xms512M','-Xmx1536M',*launch,'--nogui']
     print('Running',platform,mc,'log:',log,flush=True)
     process=None
@@ -86,22 +87,46 @@ def main():
                 for line in process.stdout:
                     output.write(line);output.flush();lines.append(line)
                     if 'Done (' in line and 'For help' in line:ready.set()
+                    if "Finished LazoDisc 'Runtime fixture'" in line and '(track-ended)' in line:completed.append(time.monotonic())
         reader=threading.Thread(target=collect,daemon=True);reader.start()
         deadline=time.monotonic()+180
         while not ready.is_set() and process.poll() is None and time.monotonic()<deadline:ready.wait(.25)
         if not ready.is_set():raise RuntimeError(f'Loader did not reach ready state: {log}')
         def send(command):process.stdin.write(command+'\n');process.stdin.flush()
+        def assert_clean_playback():
+            output=''.join(lines)
+            failures=['Exception in thread','NoClassDefFoundError','NoSuchMethodError','Encountered an unexpected exception',
+                      'Failed to start streaming LazoDisc','Failed to provide LazoDisc',"Could not play 'Runtime fixture'",'[LAZO-DIAG]']
+            if any(token in output for token in failures):raise RuntimeError(f'Playback emitted a runtime error: {log}')
+        def wait_for_completion(count,started):
+            deadline=time.monotonic()+max(30,fixture_seconds+15)
+            while len(completed)<count and process.poll() is None and time.monotonic()<deadline:
+                assert_clean_playback();time.sleep(.05)
+            assert_clean_playback()
+            if len(completed)<count:raise RuntimeError(f'Decoded playback did not complete: {log}')
+            if completed[count-1]-started<fixture_seconds*.75:raise RuntimeError(f'Playback ended before the fixture could be heard: {log}')
         send('forceload add 0 0')
         time.sleep(1)
         send('setblock 0 80 0 minecraft:jukebox')
-        send('data merge block 0 80 0 {RecordItem:'+item+'}')
+        first_started=time.monotonic();send('data merge block 0 80 0 {RecordItem:'+item+'}')
         deadline=time.monotonic()+50
-        while '/test.wav' not in requested and process.poll() is None and time.monotonic()<deadline:time.sleep(.1)
+        while '/test.wav' not in requested and process.poll() is None and time.monotonic()<deadline:
+            assert_clean_playback();time.sleep(.1)
         if '/test.wav' not in requested:raise RuntimeError(f'Recorded item did not request local audio: {log}')
-        time.sleep(5);send('data get block 0 80 0');time.sleep(1);send('stop')
+        wait_for_completion(1,first_started)
+        cancelled=item.replace('Runtime fixture','Cancelled fixture')
+        send('data merge block 0 80 0 {RecordItem:'+cancelled+'}')
+        send('data remove block 0 80 0 RecordItem')
+        second_started=time.monotonic();send('data merge block 0 80 0 {RecordItem:'+item+'}')
+        wait_for_completion(2,second_started)
+        send('data get block 0 80 0');time.sleep(1);send('stop')
         code=process.wait(timeout=60);reader.join(timeout=5)
         if code:raise RuntimeError(f'Mod server exited {code}: {log}')
-        result={'platform':platform,'minecraft':mc,'sha256':digest,'voice':voice['version'],'fresh_world':world,'ready':True,'audio_requests':requested,'exit':code,'log':str(log),'scope':'Real final-JAR loader/Mixin startup and first persisted jukebox HTTP audio load in a fresh world; no client listening assertion'}
+        assert_clean_playback()
+        result={'platform':platform,'minecraft':mc,'sha256':digest,'voice':voice['version'],'fresh_world':world,'ready':True,'audio_requests':requested,
+                'completed_playbacks':len(completed),'fixture_seconds':fixture_seconds,'first_playback_seconds':completed[0]-first_started,
+                'second_playback_seconds':completed[1]-second_started,'exit':code,'log':str(log),
+                'scope':'Real final-JAR loader/Mixin startup, two timed complete decoded jukebox playbacks with rapid replacement/extraction, no uncaught playback errors, and clean shutdown in a fresh world; no client listening assertion'}
         (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
     finally:
         if process is not None and process.poll() is None:

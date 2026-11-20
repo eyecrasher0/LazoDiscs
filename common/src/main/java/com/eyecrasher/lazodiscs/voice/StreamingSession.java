@@ -46,7 +46,8 @@ public final class StreamingSession implements AutoCloseable {
         load = AudioLoadExecutor.submit(() -> {
             try {
                 if (closed.get()) return;
-                var opened = LavaPcmFeeder.openStream(disc.url(), disc.title(), disc.volume());
+                var opened = LavaPcmFeeder.openStream(disc.url(), disc.title(), disc.volume(),
+                        error -> { if (!closed.get()) failure = messageOf(error); });
                 synchronized (this) {
                     if (closed.get()) { opened.close(); return; }
                     playback = opened;

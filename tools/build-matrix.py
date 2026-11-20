@@ -43,6 +43,8 @@ def main():
             if prior.get('status')=='pass' and prior.get('build_inputs_sha256')==fingerprint and (args.compile_only or artifact.is_file() and hashlib.sha256(artifact.read_bytes()).hexdigest()==prior.get('sha256')):
                 print(json.dumps(dict(prior,reused=True)),flush=True);return prior
         command=[str(module/'gradlew'),'-p',str(module),'--project-cache-dir',str(output/'project-cache'/platform/mc),f'-PlazoOutputRoot={output}','--console=plain','--max-workers=2']
+        # ForgeGradle6 caches MCP services from a closed project when a daemon is reused.
+        if platform=='forge' or platform=='legacy-client' and mc.startswith('forge'):command.append('--no-daemon')
         if platform=='paper':command.append(f'-PminecraftTarget={mc}')
         command+=['compileJava'] if args.compile_only else ['build']
         if not args.compile_only and platform in ['bukkit','paper']:command+=['integrationPlugin']

@@ -66,7 +66,7 @@ public final class JukeboxPlaybackManager {
                     "Refusing to start LazoDisc '{}' at {} — block is on a Sable sub-level "
                             + "and allowPlaybackOnSablePlatforms is disabled in config.",
                     disc.title(),
-                    pos.toShortString());
+                    pos.toString());
             VanillaRecordStopper.stopVanillaRecordsNear(level, pos, 4.0D);
             return;
         }
@@ -75,7 +75,7 @@ public final class JukeboxPlaybackManager {
             LazoDiscs.LOGGER.debug(
                     "Ignoring duplicate LazoDisc start for '{}' at {} ({})",
                     disc.title(),
-                    pos.toShortString(),
+                    pos.toString(),
                     reason);
             VanillaRecordStopper.stopVanillaRecordsNear(level, pos, 4.0D);
             return;
@@ -87,7 +87,7 @@ public final class JukeboxPlaybackManager {
                 old.stop();
             } catch (Throwable e) {
                 LazoDiscs.LOGGER.warn(
-                        "Failed to stop old LazoDisc at {}: {}", pos.toShortString(), e.toString());
+                        "Failed to stop old LazoDisc at {}: {}", pos.toString(), e.toString());
             }
         }
 
@@ -117,12 +117,12 @@ public final class JukeboxPlaybackManager {
             LazoDiscs.LOGGER.info(
                     "Started LazoDisc '{}' at {} ({}, dynamicPosition={})",
                     disc.title(),
-                    pos.toShortString(),
+                    pos.toString(),
                     reason,
                     dynamicPosition);
         } catch (Throwable e) {
             LazoDiscs.LOGGER.warn(
-                    "Failed to start LazoDisc at {}: {}", pos.toShortString(), e.toString());
+                    "Failed to start LazoDisc at {}: {}", pos.toString(), e.toString());
         }
     }
 
@@ -137,7 +137,7 @@ public final class JukeboxPlaybackManager {
             LazoDiscs.LOGGER.info(
                     "Finished LazoDisc '{}' at {} ({})",
                     current.disc().title(),
-                    pos.toShortString(),
+                    pos.toString(),
                     reason);
         }
     }
@@ -154,9 +154,9 @@ public final class JukeboxPlaybackManager {
                 old.stop();
             } catch (Throwable e) {
                 LazoDiscs.LOGGER.warn(
-                        "Failed to stop LazoDisc at {}: {}", pos.toShortString(), e.toString());
+                        "Failed to stop LazoDisc at {}: {}", pos.toString(), e.toString());
             }
-            LazoDiscs.LOGGER.info("Stopped LazoDisc at {} ({})", pos.toShortString(), reason);
+            LazoDiscs.LOGGER.info("Stopped LazoDisc at {} ({})", pos.toString(), reason);
         }
         if (stopVanillaRecords) {
             VanillaRecordStopper.stopVanillaRecordsNear(level, pos, 4.0D);

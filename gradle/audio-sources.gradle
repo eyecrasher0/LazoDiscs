@@ -13,6 +13,11 @@ dependencies {
 tasks.named('shadowJar') {
     exclude 'com/sedmelluq/discord/lavaplayer/source/youtube/**'
     exclude 'META-INF/versions/**/com/sedmelluq/discord/lavaplayer/source/youtube/**'
+    // Gson's compile annotations belong to the host modules on modern Forge/NeoForge.
+    // Bundling them unrelocated makes JPMS reject the mod before initialization.
+    exclude 'com/google/errorprone/**'
+    exclude 'com/google/j2objc/annotations/**'
+    exclude 'org/jspecify/**'
 }
 
 def releaseArchive = project.hasProperty('lazoReleaseArchive') ? tasks.named(project.lazoReleaseArchive) :
