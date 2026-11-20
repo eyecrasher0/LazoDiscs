@@ -17,7 +17,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.List;
-import java.util.UUID;
 
 /** Bukkit compatibility distribution for Spigot, Purpur and region-threaded Folia. */
 public final class LazoDiscs extends JavaPlugin {
@@ -91,8 +90,8 @@ public final class LazoDiscs extends JavaPlugin {
     public void onRegion(Location location, Runnable action) { if (!stopping && isEnabled()) scheduler.region(location, () -> { if (!stopping) action.run(); }); }
     public void onPlayer(Player player, Runnable action, Runnable retired) { if (!stopping && isEnabled()) scheduler.player(player, () -> { if (!stopping) action.run(); }, retired); }
     public void onPlayer(Player player, Runnable action) {
-        UUID playerId = player.getUniqueId();
-        onPlayer(player, action, () -> { if (commands != null) commands.cancel(playerId); });
+        Runnable retired = commands == null ? () -> {} : commands.retirement(player);
+        onPlayer(player, action, retired);
     }
     public void markAudioUsed() { voice.markAudioUsed(); }
     public void voiceStopped() { onMain(() -> { if (playback != null) playback.stopAll(); }); }

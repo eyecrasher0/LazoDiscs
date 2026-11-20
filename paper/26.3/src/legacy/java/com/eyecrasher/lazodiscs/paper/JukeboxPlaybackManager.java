@@ -257,10 +257,9 @@ public final class JukeboxPlaybackManager implements Listener {
 
     private void stopVanilla(Jukebox jukebox) {
         jukebox.stopPlaying();
-        // Old CraftBukkit implementations do not consistently send the record-stop event
-        // or notify neighboring hoppers when their native playing flag changes.
-        jukebox.getWorld()
-                .playEffect(jukebox.getLocation(), org.bukkit.Effect.RECORD_PLAY, 0);
+        // CraftBukkit sends the version-appropriate stop event. A manual RECORD_PLAY(0)
+        // starts song registry entry zero on modern clients instead of stopping it.
+        // Keep neighboring hopper state synchronized after the native playing flag changes.
         for (var face :
                 java.util.List.of(
                         org.bukkit.block.BlockFace.DOWN,

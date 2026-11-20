@@ -7,6 +7,7 @@ Voice adapter. It is not a client listening or full gameplay test.
 import argparse,fcntl,hashlib,http.server,importlib.util,io,json,os,re,shutil,socket,subprocess,tempfile,threading,time,urllib.request,uuid,wave,zipfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+HARNESS_SHA256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 spec=importlib.util.spec_from_file_location('audio_fixture',ROOT/'paper/26.3/tools/integration.py');audio=importlib.util.module_from_spec(spec);spec.loader.exec_module(audio)
 def fetch(url,path):
     if not path.exists():
@@ -27,11 +28,13 @@ def main():
     fcntl.flock(lock,fcntl.LOCK_EX | fcntl.LOCK_NB)
     if (folder/'result.json').exists():
         (folder/'result.json').replace(folder/'result-previous.json')
-    module=ROOT/platform/mc;build=(module/'build.gradle').read_text();installer_java=args.installer_java or args.java
+    module=ROOT/platform/mc;build=(module/'build.gradle').read_text()
+    installer_java=args.installer_java or (str(Path(os.environ['JAVA_17_HOME'])/'bin/java')
+        if platform=='forge' and os.environ.get('JAVA_17_HOME') else args.java)
     run=folder/'server';run.mkdir(exist_ok=True)
     if platform=='fabric':
         version=re.search(r'net.fabricmc:fabric-loader:([^\']+)',build)[1]
-        installer=fetch('https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.2/fabric-installer-1.1.2.jar',folder/'installer.jar')
+        installer=fetch('https://maven.fabricmc.net/net/fabricmc/fabric-installer/1.1.2/fabric-installer-1.1.2.jar',folder/'fabric-installer-1.1.2.jar')
         marker=run/'fabric-server-launch.jar'
         command=[installer_java,'-jar',str(installer),'server','-mcversion',mc,'-loader',version,'-downloadMinecraft','-dir',str(run)]
         launch=['-jar',str(marker)]
@@ -40,12 +43,17 @@ def main():
             version=re.search(r"net.minecraftforge:forge:([^']+)",build)[1];group='net/minecraftforge/forge';url=f'https://maven.minecraftforge.net/{group}/{version}/forge-{version}-installer.jar'
         else:
             version=re.search(r"neoForge\s*\{.*?version\s*=\s*'([^']+)'",build,re.S)[1];group='net/neoforged/neoforge';url=f'https://maven.neoforged.net/releases/{group}/{version}/neoforge-{version}-installer.jar'
-        installer=fetch(url,folder/'installer.jar');marker=run/'libraries'/group/version/'unix_args.txt'
+        installer=fetch(url,folder/('installer-'+version+'.jar'));marker=run/'libraries'/group/version/'unix_args.txt'
         command=[installer_java,'-jar',str(installer),'--installServer',str(run)]
         launch=['@'+str(marker)]
         if mc=='1.16.5':marker=run/f'forge-{version}.jar';launch=['-jar',str(marker)]
-    if not marker.exists():
+    receipt=folder/'install-success.json'
+    expected_install={'platform':platform,'minecraft':mc,'loader':version,'installer_sha256':hashlib.sha256(installer.read_bytes()).hexdigest()}
+    prior_install=json.loads(receipt.read_text()) if receipt.exists() else None
+    # Launch arguments are extracted before the installer verifies/remaps its final JARs.
+    if not marker.exists() or prior_install!=expected_install:
         with (folder/'install.log').open('w') as log:subprocess.run(command,cwd=folder,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=600)
+        if marker.is_file():receipt.write_text(json.dumps(expected_install,indent=2)+'\n')
     if not marker.is_file():raise RuntimeError(f'Loader installation failed: {marker}')
     mods=run/'mods';mods.mkdir(exist_ok=True)
     artifact=args.output_root.resolve()/'release'/f'lazodiscs-{platform}-1.0.8+{mc}.jar'
@@ -68,9 +76,17 @@ def main():
     else:
 
         pv=run/'config/plasmovoice';pv.mkdir(exist_ok=True);(pv/'server.toml').write_text('[host]\nip = "127.0.0.1"\nport = 0\n')
-    requested=[]
+    requested=[];cold_requested=threading.Event();cold_release=threading.Event();cold_responses=[]
     class Fixture(audio.AudioFixture):
-        def do_GET(self):requested.append(self.path);super().do_GET()
+        def do_GET(self):
+            requested.append(self.path)
+            if self.path=='/cold.wav':
+                cold_requested.set()
+                if not cold_release.wait(30):self.send_error(504);return
+                self.path='/test.wav'
+                try:super().do_GET()
+                finally:cold_responses.append(time.monotonic())
+            else:super().do_GET()
     fixture_http=http.server.ThreadingHTTPServer(('127.0.0.1',0),Fixture);threading.Thread(target=fixture_http.serve_forever,daemon=True).start()
     url=f'http://127.0.0.1:{fixture_http.server_port}/test.wav';disc='{url:"'+url+'",title:"Runtime fixture",range:64,volume:1.0f,id:"'+str(uuid.uuid4())+'"}'
     legacy=mc.startswith(('1.16.','1.17','1.18','1.19')) or mc in ['1.20','1.20.1','1.20.2','1.20.3','1.20.4']
@@ -92,12 +108,24 @@ def main():
         deadline=time.monotonic()+180
         while not ready.is_set() and process.poll() is None and time.monotonic()<deadline:ready.wait(.25)
         if not ready.is_set():raise RuntimeError(f'Loader did not reach ready state: {log}')
+        playback_start_line=len(lines)
+        # Optional native-transport discovery can log host errors before playback. Reject
+        # startup errors in our own audio/plugin code, without confusing Linux's expected
+        # macOS KQueue unavailability with a failure to play a disc.
+        failure_tokens=['Exception in thread','NoClassDefFoundError','NoSuchMethodError','Encountered an unexpected exception',
+                        'Failed to start streaming LazoDisc','Failed to provide LazoDisc',"Could not play '",'FriendlyException:','[LAZO-DIAG]']
+        startup=re.sub(r'\x1b\[[0-9;]*m','',''.join(lines[:playback_start_line]))
+        events=re.split(r'(?m)(?=^(?:\[\d\d:\d\d:\d\d|\d{4}-\d\d-\d\dT|[A-Z][a-z]{2} \d{1,2}, \d{4}))',startup)
+        external_startup_errors=0
+        for event in events:
+            if not any(token in event for token in failure_tokens):continue
+            if any(owner in event for owner in ['com.eyecrasher.lazodiscs.','com/eyecrasher/lazodiscs/','com.sedmelluq.discord.lavaplayer.','dev.lavalink.youtube.']):
+                raise RuntimeError(f'Plugin/audio startup emitted an error: {log}')
+            external_startup_errors+=1
         def send(command):process.stdin.write(command+'\n');process.stdin.flush()
         def assert_clean_playback():
-            output=''.join(lines)
-            failures=['Exception in thread','NoClassDefFoundError','NoSuchMethodError','Encountered an unexpected exception',
-                      'Failed to start streaming LazoDisc','Failed to provide LazoDisc',"Could not play 'Runtime fixture'",'[LAZO-DIAG]']
-            if any(token in output for token in failures):raise RuntimeError(f'Playback emitted a runtime error: {log}')
+            output=''.join(lines[playback_start_line:])
+            if any(token in output for token in failure_tokens):raise RuntimeError(f'Playback emitted a runtime error: {log}')
         def wait_for_completion(count,started):
             deadline=time.monotonic()+max(30,fixture_seconds+15)
             while len(completed)<count and process.poll() is None and time.monotonic()<deadline:
@@ -108,6 +136,25 @@ def main():
         send('forceload add 0 0')
         time.sleep(1)
         send('setblock 0 80 0 minecraft:jukebox')
+        # The very first decoder must be cancelled cold, not after a successful track
+        # has already loaded every codec/control class from Forge's shared archive.
+        cold_item=item.replace('/test.wav','/cold.wav').replace('Runtime fixture','Cold cancelled fixture')
+        cold_started=time.monotonic();send('data merge block 0 80 0 {RecordItem:'+cold_item+'}')
+        deadline=time.monotonic()+30
+        while not cold_requested.is_set() and process.poll() is None and time.monotonic()<deadline:
+            assert_clean_playback();time.sleep(.05)
+        if not cold_requested.is_set():raise RuntimeError(f'Cold audio load never reached the fixture: {log}')
+        send('data remove block 0 80 0 RecordItem')
+        # Allow the server to process removal while the resolver is still held in HTTP.
+        time.sleep(.2);cold_cancelled=time.monotonic();cold_release.set()
+        deadline=time.monotonic()+30
+        while len(cold_responses)<2 and process.poll() is None and time.monotonic()<deadline:
+            assert_clean_playback();time.sleep(.05)
+        if len(cold_responses)<2:raise RuntimeError(f'Cancelled cold decoder did not finish its HTTP load: {log}')
+        # Let the late opened decoder be disposed before any successful playback can
+        # warm the class archive and hide an interruption-induced read failure.
+        settle=time.monotonic()+2
+        while time.monotonic()<settle:assert_clean_playback();time.sleep(.05)
         first_started=time.monotonic();send('data merge block 0 80 0 {RecordItem:'+item+'}')
         deadline=time.monotonic()+50
         while '/test.wav' not in requested and process.poll() is None and time.monotonic()<deadline:
@@ -123,12 +170,16 @@ def main():
         code=process.wait(timeout=60);reader.join(timeout=5)
         if code:raise RuntimeError(f'Mod server exited {code}: {log}')
         assert_clean_playback()
+        if hashlib.sha256(Path(__file__).read_bytes()).hexdigest()!=HARNESS_SHA256:raise RuntimeError('Harness changed during verification; rerun')
         result={'platform':platform,'minecraft':mc,'sha256':digest,'voice':voice['version'],'fresh_world':world,'ready':True,'audio_requests':requested,
+                'harness_sha256':HARNESS_SHA256,'console_sha256':hashlib.sha256(log.read_bytes()).hexdigest(),'playback_start_line':playback_start_line,
+                'startup_external_error_events':external_startup_errors,'cold_cancelled':cold_started<cold_cancelled<first_started,'cold_requests':requested.count('/cold.wav'),
                 'completed_playbacks':len(completed),'fixture_seconds':fixture_seconds,'first_playback_seconds':completed[0]-first_started,
                 'second_playback_seconds':completed[1]-second_started,'exit':code,'log':str(log),
-                'scope':'Real final-JAR loader/Mixin startup, two timed complete decoded jukebox playbacks with rapid replacement/extraction, no uncaught playback errors, and clean shutdown in a fresh world; no client listening assertion'}
+                'scope':'Real final-JAR loader startup, in-flight cancellation of the first cold decoder before successful playback, two timed complete decoded jukebox playbacks with rapid replacement/extraction, no plugin/audio startup or playback errors, and clean shutdown; no client listening assertion'}
         (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
     finally:
+        cold_release.set()
         if process is not None and process.poll() is None:
             process.terminate()
             try:process.wait(timeout=15)

@@ -113,7 +113,7 @@ public final class LazoDiscsCommands implements Listener {
                         ? DiscDataUtil.sanitizeTitle(
                                 String.join(" ", Arrays.copyOfRange(args, 2, args.length)))
                         : null;
-        Pending work = new Pending(original.clone(), player.getInventory().getHeldItemSlot());
+        Pending work = new Pending(player, original.clone(), player.getInventory().getHeldItemSlot());
         pending.put(player.getUniqueId(), work);
         player.sendMessage(LazoDiscsText.resolvingTrack().color(NamedTextColor.GRAY));
         plugin.markAudioUsed();
@@ -210,7 +210,7 @@ public final class LazoDiscsCommands implements Listener {
             player.sendMessage(LazoDiscsText.searchNamesOnly().color(NamedTextColor.RED));
             return;
         }
-        Pending work = new Pending(null, -1);
+        Pending work = new Pending(player, null, -1);
         pending.put(player.getUniqueId(), work);
         player.sendMessage(LazoDiscsText.searching(query).color(NamedTextColor.GRAY));
         plugin.markAudioUsed();
@@ -344,6 +344,17 @@ public final class LazoDiscsCommands implements Listener {
         if (work != null && work.future != null) work.future.cancel(true);
     }
 
+    /** Capture the exact request and login session before scheduling a player callback. */
+    public Runnable retirement(Player player) {
+        UUID playerId = player.getUniqueId();
+        Pending expected = pending.get(playerId);
+        if (expected == null || expected.owner != player) return () -> {};
+        return () -> {
+            pending.remove(playerId, expected);
+            if (expected.future != null) expected.future.cancel(false);
+        };
+    }
+
     private void cancelBurn(UUID player) {
         Pending work = pending.get(player);
         if (work != null && work.snapshot != null) {
@@ -381,7 +392,7 @@ public final class LazoDiscsCommands implements Listener {
 
     @EventHandler
     public void quit(PlayerQuitEvent event) {
-        cancel(event.getPlayer().getUniqueId());
+        retirement(event.getPlayer()).run();
     }
 
     public void shutdown() {
@@ -389,11 +400,13 @@ public final class LazoDiscsCommands implements Listener {
     }
 
     private static final class Pending {
+        private final Player owner;
         private final ItemStack snapshot;
         private final int slot;
-        private Future<?> future;
+        private volatile Future<?> future;
 
-        private Pending(ItemStack snapshot, int slot) {
+        private Pending(Player owner, ItemStack snapshot, int slot) {
+            this.owner = owner;
             this.snapshot = snapshot;
             this.slot = slot;
         }
