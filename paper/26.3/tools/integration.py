@@ -41,7 +41,15 @@ def download(url, destination, algorithm, digest):
         data = response.read()
     if hashlib.new(algorithm, data).hexdigest() != digest:
         raise RuntimeError(f"Checksum mismatch for {url}")
-    destination.write_bytes(data)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    # A digest-named cache can be shared by simultaneous server targets.
+    with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=destination.name + ".", delete=False) as stream:
+        temporary = Path(stream.name)
+        stream.write(data)
+    try:
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def wav_fixture():
@@ -58,11 +66,21 @@ def wav_fixture():
 class AudioFixture(http.server.BaseHTTPRequestHandler):
     audio = wav_fixture()
     shutdown_request = None
+    controls = None
 
     def do_GET(self):
         if self.path == "/slow.wav?phase=shutdown" and self.shutdown_request is not None:
             self.shutdown_request.touch()
         self.path = self.path.split("?", 1)[0]
+        phase = {"/held-cancel.wav": "cancel", "/held-shutdown.wav": "shutdown"}.get(self.path)
+        if phase is not None and self.controls is not None:
+            (self.controls / (phase + "-started")).touch()
+            deadline = time.monotonic() + 30
+            while not (self.controls / (phase + "-release")).exists():
+                if time.monotonic() >= deadline:
+                    self.send_error(504)
+                    return
+                time.sleep(.01)
         if self.path == "/missing.wav":
             # Keep the loading state observable even when a local 404 is extremely fast.
             time.sleep(0.5)
@@ -70,17 +88,21 @@ class AudioFixture(http.server.BaseHTTPRequestHandler):
             time.sleep(4)
         if self.path == "/stall.wav":
             time.sleep(20)
-        if self.path not in ("/test.wav", "/slow.wav", "/stall.wav"):
+        if self.path not in ("/test.wav", "/slow.wav", "/stall.wav", "/held-cancel.wav", "/held-shutdown.wav"):
             self.send_error(404)
             return
-        self.send_response(200)
-        self.send_header("Content-Type", "audio/wav")
-        self.send_header("Content-Length", str(len(self.audio)))
-        self.end_headers()
         try:
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", str(len(self.audio)))
+            self.end_headers()
             self.wfile.write(self.audio)
         except (BrokenPipeError, ConnectionResetError):
+            # A retired/disabled client's connection may already be closed.
             pass
+        finally:
+            if phase is not None and self.controls is not None:
+                (self.controls / (phase + "-returned")).touch()
 
     def log_message(self, *_):
         pass
@@ -94,6 +116,7 @@ def main():
     parser.add_argument("--output-root", type=Path, help="External build-matrix output root")
     parser.add_argument("--plasmo", choices=PV, default="stable")
     args = parser.parse_args()
+    harness_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     target = TARGETS[args.minecraft]
     cache = (args.work_dir or MODULE / "build" / args.minecraft / "integration").resolve()
     cache.mkdir(parents=True, exist_ok=True)
@@ -112,6 +135,9 @@ def main():
     for source, name in ((release, "LazoDiscs.jar"), (fixture, "LazoDiscsIntegration.jar"), (cache / f"pv-{args.plasmo}.jar", "PlasmoVoice.jar")):
         shutil.copy2(source, plugins / name)
     tested_hash = hashlib.sha256((plugins / "LazoDiscs.jar").read_bytes()).hexdigest()
+    fixture_hash = hashlib.sha256((plugins / "LazoDiscsIntegration.jar").read_bytes()).hexdigest()
+    voice_hash = hashlib.sha512((plugins / "PlasmoVoice.jar").read_bytes()).hexdigest()
+    server_hash = hashlib.sha256((cache / "paper.jar").read_bytes()).hexdigest()
     shutil.copy2(cache / "paper.jar", run / "paper.jar")
     # Reuse Paper's downloaded vanilla server and libraries, never its worlds/configuration.
     for name in ("cache", "libraries", "versions"):
@@ -160,7 +186,10 @@ def main():
         report = json.loads(result.read_text())
         if hashlib.sha256(release.read_bytes()).hexdigest() != tested_hash:
             raise RuntimeError("Release JAR changed while its copied test instance was running")
-        report.update(paper=f"{args.minecraft}-{target['build']}", plasmo=args.plasmo, log=str(run / "console.log"), jar_sha256=tested_hash)
+        if hashlib.sha256(fixture.read_bytes()).hexdigest() != fixture_hash or hashlib.sha256(Path(__file__).read_bytes()).hexdigest() != harness_hash:
+            raise RuntimeError("Fixture/verifier changed during integration; rerun")
+        report.update(fixture_sha256=fixture_hash, harness_sha256=harness_hash, server_sha256=server_hash,
+                      voice_sha512=voice_hash, console_sha256=hashlib.sha256((run / "console.log").read_bytes()).hexdigest(), paper=f"{args.minecraft}-{target['build']}", plasmo=args.plasmo, log=str(run / "console.log"), jar_sha256=tested_hash)
         (cache / f"result-{args.plasmo}.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))
         if report["failure"] is not None:

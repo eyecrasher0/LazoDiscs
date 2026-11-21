@@ -64,6 +64,11 @@ HTTP is disabled by default. Language files in `plugins/LazoDiscs/lang/` reload
 automatically; other settings require a restart. Players can adjust **Discs** in
 their Plasmo Voice volume settings. See the [detailed configuration guide](26.3/README.md).
 
+Signed links remain intact on discs. Media session cookies belong to one recording's
+load/playback and are not shared with other recordings or persisted on discs.
+Spotify matching requires an equal normalized song title after known display labels
+are removed; an unrelated longer title is rejected.
+
 Paper 1.21.4+ replaces the vanilla song with a silent, long-lived registry entry,
 preserving comparator strength and the native playing state until custom audio ends.
 The bundled datapack on 1.21.4–26.2 is installed and enabled by the plugin bootstrap.
@@ -90,12 +95,13 @@ and selects only the relevant Paper adapters. With a **JDK 25**:
 ```sh
 ./paper/26.3/gradlew -p paper/26.3 --project-cache-dir paper/26.3/build/1.21.4/gradle-cache -PminecraftTarget=1.21.4 build integrationPlugin
 python3 paper/26.3/tools/integration.py --minecraft 1.21.4 --java /path/to/java21/bin/java
+python3 tools/test-release-verification.py
 python3 paper/26.3/tools/matrix.py --jobs 2
 ```
 
 For the matrix, set `JAVA_17_HOME`, `JAVA_21_HOME` and `JAVA_25_HOME` (or the standard
-`JAVA_HOME_17_X64` etc.). `--plasmo beta --test-only` tests existing JARs with Plasmo
-Voice 2.2.0-beta.3; use it only for 1.21+ targets advertised by that beta.
+`JAVA_HOME_17_X64` etc.). `--plasmo beta --versions 26.3 --test-only` tests existing JARs with Plasmo
+Voice 2.2.0-beta.4 on the selected 26.3 target.
 
 The integration runner accepts the [Minecraft EULA](https://www.minecraft.net/eula)
 only for disposable test servers, binds game/voice/fixture HTTP to loopback, creates

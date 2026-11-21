@@ -128,4 +128,27 @@ class AudioPlaybackPreparationTest {
             assertArrayEquals(FIRST_FRAME, player.provide().getData());
         } finally { track.failLater.countDown(); player.destroy(); manager.shutdown(); }
     }
+
+    @Test void cooperativeCancellationReturnsTheLoaderWhileTheDecoderResponseIsStillHeld() throws Exception {
+        var manager = new CooperativeAudioPlayerManager();
+        AudioPlayer player = manager.createPlayer();
+        var track = new DelayedTrack(null, false);
+        var cancelled = new AtomicBoolean();
+        var returned = new CountDownLatch(1);
+        var failure = new AtomicReference<Throwable>();
+        Thread load = new Thread(() -> {
+            try { AudioPlaybackPreparation.start(player, track, null, cancelled::get); }
+            catch (Throwable error) { failure.set(error); }
+            finally { returned.countDown(); }
+        });
+        try {
+            load.start();assertTrue(track.entered.await(5,TimeUnit.SECONDS));
+            cancelled.set(true);
+            assertTrue(returned.await(5,TimeUnit.SECONDS));
+            assertEquals(1,track.release.getCount(),"The response must remain held until the loader returned");
+            assertInstanceOf(java.util.concurrent.CancellationException.class,failure.get());
+            assertNull(player.getPlayingTrack());
+            assertFalse(track.interruptedBeforeFrame.get());
+        } finally { track.release.countDown();player.destroy();manager.shutdown();load.join(5000); }
+    }
 }

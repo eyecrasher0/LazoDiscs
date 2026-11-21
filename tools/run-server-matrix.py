@@ -22,6 +22,10 @@ def main():
     args=p.parse_args();out=args.output_root.resolve();work=args.work_root.resolve()
     release=out/'bukkit/26.3/libs/lazodiscs-bukkit-1.0.8.jar';fixture=release.with_name('lazodiscs-bukkit-integration.jar')
     sha=hashlib.sha256(release.read_bytes()).hexdigest();fixture_sha=hashlib.sha256(fixture.read_bytes()).hexdigest()
+    verifier_inputs={'harness_sha256':ROOT/'tools/server-integration.py',
+                     'http_fixture_sha256':ROOT/'paper/26.3/tools/integration.py',
+                     'config_sha256':ROOT/'bukkit/26.3/src/main/resources/config.yml'}
+    verifier_inputs={key:hashlib.sha256(path.read_bytes()).hexdigest() for key,path in verifier_inputs.items()}
     server_pins=json.loads((ROOT/'server-builds.json').read_text())
     rows=[r for r in json.loads((ROOT/'compatibility.json').read_text())['entries'] if r['platform'] in args.platform and (not args.versions or r['minecraft'] in args.versions)]
     def run(row):
@@ -31,6 +35,7 @@ def main():
             voice=row['voice']
             cached_voice=work/'.voice'/(voice['sha512']+'.jar')
             if ('failure' in prior and prior['failure'] is None and prior.get('jar_sha256')==sha
+                    and all(prior.get(key)==value for key,value in verifier_inputs.items())
                     and prior.get('fixture_sha256')==fixture_sha and prior.get('voice')==voice['version']
                     and current_artifacts(prior,result.with_name('server.jar'),server_pins.get(f'{platform}/{mc}'),cached_voice,voice)):
                 print(f'SKIP verified {platform}/{mc}',flush=True);return prior

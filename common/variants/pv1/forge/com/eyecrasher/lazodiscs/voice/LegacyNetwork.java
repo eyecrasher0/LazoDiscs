@@ -39,9 +39,20 @@ public final class LegacyNetwork {
     }
     @net.minecraftforge.eventbus.api.SubscribeEvent public static void quit(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) { CLIENTS.remove(event.getPlayer().getUUID()); }
     public static void reset() { CLIENTS.clear(); }
-    public static void broadcast(ServerLevel level, Vec3 center, int range, byte[] bytes) {
-        for (var player : level.players()) if (CLIENTS.contains(player.getUUID()) && player.position().distanceToSqr(center) <= (double) range * range)
-            player.connection.send(new ClientboundCustomPayloadPacket(CHANNEL, new FriendlyByteBuf(Unpooled.wrappedBuffer(bytes))));
+    public static void broadcast(ServerLevel level, Vec3 center, int range, LegacyAudioPacket packet, LegacyAudience audience) {
+        var audible = new java.util.ArrayList<UUID>();
+        if (packet.kind == LegacyAudioPacket.FRAME) {
+            for (var player : level.players()) {
+                if (CLIENTS.contains(player.getUUID()) && player.position().distanceToSqr(center) <= (double) range * range)
+                    audible.add(player.getUUID());
+            }
+        }
+        audience.deliver(packet, audible, (id, bytes) -> {
+            var player = level.getServer().getPlayerList().getPlayer(id);
+            if (player != null && CLIENTS.contains(id)) {
+                player.connection.send(new ClientboundCustomPayloadPacket(CHANNEL, new FriendlyByteBuf(Unpooled.wrappedBuffer(bytes))));
+            }
+        });
     }
     private static final class Payload { final byte[] bytes; Payload(byte[] bytes) { this.bytes = bytes; } }
 }

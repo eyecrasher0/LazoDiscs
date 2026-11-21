@@ -47,6 +47,8 @@ LazoDiscs **1.0.8** covers the compatible versions from Minecraft 1.16.5 to 26.3
 
 The YouTube sign-in refusal now gives players a short English message and emits a concise console warning. Other failures keep their diagnostic details. Dependency updates retain the Java 8/16 compatibility needed by older mod builds.
 
+Signed links remain intact on discs. Access cookies are isolated per recording load and are not saved on discs. Spotify matching requires equal song titles after known display labels are removed; a different song with a longer title is rejected.
+
 Experimental playback on Sable / Create Aeronautics moving platforms is available through the server configuration and is disabled by default. It requires a compatible version of the platform mod.
 
 [Modrinth](https://modrinth.com/mod/lazodiscs) · [CurseForge](https://www.curseforge.com/minecraft/mc-mods/lazodiscs) · [GitHub releases](https://github.com/eyecrasher0/LazoDiscs/releases) · [Report a bug](https://github.com/eyecrasher0/LazoDiscs/issues)
@@ -99,6 +101,8 @@ LazoDiscs позволяет записать свою музыку на обы�
 LazoDiscs **1.0.8** охватывает совместимые версии Minecraft от 1.16.5 до 26.3, включая архивные стабильные Voice 2.0/2.1 и версии с Voice 1. В [полной таблице](docs/compatibility-1.0.8.md) каждый патч и платформа указаны отдельно. Для 1.7.10, 1.8.9 и 1.12.2 официального Plasmo Voice нет, поэтому они исключены.
 
 При отказе YouTube с требованием входа игрок получает короткое английское сообщение, а консоль — краткое предупреждение. Подробности остальных ошибок сохранены. Обновлённые зависимости сохраняют необходимую старым модам совместимость с Java 8/16.
+
+Подписанные ссылки сохраняются в пластинках полностью. Cookies доступа изолированы для каждой загрузки записи и не сохраняются в пластинке. При подборе Spotify название песни должно совпадать после удаления известных служебных пометок; другая песня с более длинным названием отклоняется.
 
 Экспериментальное воспроизведение на движущихся платформах Sable / Create Aeronautics включается в конфиге сервера и по умолчанию отключено. Для него нужна совместимая версия мода платформ.
 

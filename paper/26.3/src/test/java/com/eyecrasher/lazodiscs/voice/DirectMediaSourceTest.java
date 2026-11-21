@@ -224,6 +224,32 @@ class DirectMediaSourceTest {
         }
     }
 
+    @Test void hlsPlaybackKeepsTheSessionCookieReceivedDuringTheProbe() throws Exception {
+        try (var fixture = new Fixture()) {
+            var hits=new AtomicInteger();
+            fixture.http.createContext("/cookie-inner.m3u8", exchange -> {
+                int attempt=hits.getAndIncrement();
+                String cookie=exchange.getRequestHeaders().getFirst("Cookie");
+                if(attempt>0 && (cookie==null || !cookie.contains("lazo-session=fixture-cookie"))) {
+                    exchange.sendResponseHeaders(403,-1);exchange.close();return;
+                }
+                byte[] body=("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:0.4,\n"
+                    +fixture.allowed("/tone.ts?signature=exact%2Bsegment")+"\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);
+                if(attempt==0)exchange.getResponseHeaders().set("Set-Cookie","lazo-session=fixture-cookie; Path=/");
+                exchange.getResponseHeaders().set("Content-Type","application/vnd.apple.mpegurl");
+                exchange.sendResponseHeaders(200,body.length);exchange.getResponseBody().write(body);exchange.close();
+            });
+            var player=fixture.manager.createPlayer();
+            try {
+                AudioTrack own = fixture.load(fixture.allowed("/cookie-inner.m3u8"));
+                assertThrows(ExecutionException.class, () -> fixture.load(fixture.allowed("/cookie-inner.m3u8")),
+                        "An unrelated load must not inherit the first recording's cookie");
+                AudioPlaybackPreparation.start(player,own,null);
+                assertNotNull(player.provide());assertTrue(hits.get()>=2);assertTrue(fixture.hlsSegmentRequests.get()>0);
+            } finally {player.destroy();}
+        }
+    }
+
     private static byte[] wav() {
         int samples = 4800;
         ByteBuffer out = ByteBuffer.allocate(44 + samples * 2).order(ByteOrder.LITTLE_ENDIAN);
@@ -233,5 +259,81 @@ class DirectMediaSourceTest {
         out.put("data".getBytes(StandardCharsets.US_ASCII)).putInt(samples * 2);
         for (int i = 0; i < samples; i++) out.putShort((short) (Math.sin(i * 0.1) * 12000));
         return out.array();
+    }
+
+    @Test void redirectedMasterResolvesItsRelativeVariantAgainstEffectiveUri() throws Exception {
+        relativeRedirect(true);
+    }
+    @Test void redirectedMediaPlaylistResolvesItsRelativeSegmentAgainstEffectiveUri() throws Exception {
+        relativeRedirect(false);
+    }
+    private static void relativeRedirect(boolean master) throws Exception {
+        try (var fixture = new Fixture()) {
+            var initialHits = new AtomicInteger();
+            var actualChildren = new AtomicInteger();
+            String initial = master ? "/relative-master.m3u8" : "/relative-media.m3u8";
+            String effective = master ? "/effective/master/main.m3u8" : "/effective/media/inner.m3u8";
+            String media = "#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:0.4,\ntone.ts?signature=exact%2Bsegment\n#EXT-X-ENDLIST\n";
+            String playlist = master ? "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\nvariant/inner.m3u8?signature=exact%2Bplaylist\n" : media;
+            fixture.http.createContext(initial, e -> {
+                if (initialHits.incrementAndGet() > 1) {
+                    e.getResponseHeaders().set("Location", effective);e.sendResponseHeaders(302,-1);
+                } else {
+                    byte[] body=playlist.getBytes(StandardCharsets.UTF_8);
+                    e.getResponseHeaders().set("Content-Type","application/vnd.apple.mpegurl");
+                    e.sendResponseHeaders(200,body.length);e.getResponseBody().write(body);
+                }
+                e.close();
+            });
+            fixture.http.createContext("/effective/", e -> {
+                String path=e.getRequestURI().getPath();byte[] body;
+                if(path.equals(effective) || path.equals("/effective/master/variant/inner.m3u8")) {
+                    if(path.endsWith("variant/inner.m3u8")) {
+                        actualChildren.incrementAndGet();
+                        assertEquals("signature=exact%2Bplaylist", e.getRequestURI().getRawQuery());
+                    }
+                    body=(path.equals(effective)?playlist:media).getBytes(StandardCharsets.UTF_8);
+                    e.getResponseHeaders().set("Content-Type","application/vnd.apple.mpegurl");
+                } else if(path.equals("/effective/master/variant/tone.ts") || path.equals("/effective/media/tone.ts")) {
+                    actualChildren.incrementAndGet();
+                    assertEquals("signature=exact%2Bsegment",e.getRequestURI().getRawQuery());
+                    try(var in=DirectMediaSourceTest.class.getResourceAsStream("/audio/hls-control.ts")){body=in.readAllBytes();}
+                    e.getResponseHeaders().set("Content-Type","video/mp2t");
+                } else { e.sendResponseHeaders(404,-1);e.close();return; }
+                e.sendResponseHeaders(200,body.length);e.getResponseBody().write(body);e.close();
+            });
+            var player=fixture.manager.createPlayer();
+            try {
+                AudioPlaybackPreparation.start(player,fixture.load(fixture.allowed(initial)),null);
+                var frame=player.provide();assertNotNull(frame,"Relative redirect must reach real AAC decoder");
+                boolean nonzero=false;for(byte sample:frame.getData())nonzero|=sample!=0;
+                assertTrue(nonzero);assertTrue(actualChildren.get()>=(master?2:1));
+                assertTrue(initialHits.get()>=2);assertEquals(0,fixture.forbiddenRequests.get());
+            } finally { player.destroy(); }
+        }
+    }
+
+    @Test void directAudioKeepsItsOwnProbeCookieWithoutSharingAccessWithAnotherRecording() throws Exception {
+        try (var fixture = new Fixture()) {
+            var hits = new AtomicInteger();
+            fixture.http.createContext("/cookie-audio.wav", e -> {
+                int attempt = hits.getAndIncrement();
+                String cookie = e.getRequestHeaders().getFirst("Cookie");
+                if (attempt > 0 && (cookie == null || !cookie.contains("lazo-session=private-audio"))) {
+                    e.sendResponseHeaders(403, -1);e.close();return;
+                }
+                if (attempt == 0) e.getResponseHeaders().set("Set-Cookie", "lazo-session=private-audio; Path=/");
+                byte[] body = wav();e.getResponseHeaders().set("Content-Type", "audio/wav");
+                e.sendResponseHeaders(200,body.length);e.getResponseBody().write(body);e.close();
+            });
+            AudioTrack own = fixture.load(fixture.allowed("/cookie-audio.wav?token=owner"));
+            assertThrows(ExecutionException.class, () -> fixture.load(fixture.allowed("/cookie-audio.wav")));
+            var player = fixture.manager.createPlayer();
+            try {
+                AudioPlaybackPreparation.start(player, own, null);
+                assertNotNull(player.provide(), "The same recording must retain its cookie on direct replay");
+                assertTrue(hits.get() >= 3);
+            } finally { player.destroy(); }
+        }
     }
 }

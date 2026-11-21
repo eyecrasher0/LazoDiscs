@@ -65,17 +65,24 @@ public final class LazoDiscsVoiceAddon implements Listener, PluginMessageListene
             sink = current.source(location.getWorld(), location.getX() + .5, location.getY() + .5, location.getZ() + .5, disc.title(), disc.range());
         } else {
             UUID source = UUID.randomUUID();
+            var audience = new LegacyAudience();
             sink = new LegacyPacketSender(source, task -> plugin.onRegion(location, task),
                     (opus, sequence) -> LegacyAudioPacket.frame(source,
                             com.eyecrasher.lazodiscs.bukkit.Messages.worldKey(location.getWorld()),
                             location.getX() + .5, location.getY() + .5, location.getZ() + .5,
                             disc.range(), sequence, opus),
                     packet -> {
-                        for (Player player : location.getWorld().getPlayers()) {
-                            if (!legacyClients.contains(player.getUniqueId())) continue;
-                            if (packet.kind != LegacyAudioPacket.FRAME || player.getLocation().distanceSquared(location) <= (double) disc.range() * disc.range())
-                                player.sendPluginMessage(plugin, LegacyAudioPacket.CHANNEL, packet.encode());
+                        var audible = new java.util.ArrayList<UUID>();
+                        if (packet.kind == LegacyAudioPacket.FRAME) {
+                            for (Player player : location.getWorld().getPlayers()) {
+                                if (legacyClients.contains(player.getUniqueId()) && player.getLocation().distanceSquared(location) <= (double) disc.range() * disc.range())
+                                    audible.add(player.getUniqueId());
+                            }
                         }
+                        audience.deliver(packet, audible, (id, bytes) -> {
+                            Player player = org.bukkit.Bukkit.getPlayer(id);
+                            if (player != null && legacyClients.contains(id)) player.sendPluginMessage(plugin, LegacyAudioPacket.CHANNEL, bytes);
+                        });
                     });
         }
         StreamingSession stream = new StreamingSession(sink, failure -> plugin.onRegion(location, () -> finished.accept(failure)));

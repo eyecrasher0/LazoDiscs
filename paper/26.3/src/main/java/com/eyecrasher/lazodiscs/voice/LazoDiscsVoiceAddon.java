@@ -136,7 +136,7 @@ public final class LazoDiscsVoiceAddon implements AddonInitializer {
                                                     disc.url(), disc.title(), disc.volume(),
                                                     error -> {
                                                         if (!closed.get()) failure.compareAndSet(null, messageOf(error));
-                                                    });
+                                                    }, closed::get);
                                     synchronized (lock) {
                                         if (closed.get()) {
                                             opened.close();

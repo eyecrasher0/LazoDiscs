@@ -76,4 +76,49 @@ class StreamingSessionTest {
             assertFalse(worker.isAlive());assertFalse(interrupted.get(),"Interrupting NIO class loading can close Forge's shared archive");
         } finally { release.countDown();worker.join(5000);session.close();StreamingSession.shutdown(); }
     }
+
+    @Test void explicitStopAfterRealEofReachesThePriorListenerOutsideTheFrameRange() throws Exception {
+        StreamingSession.enable();
+        var manager = new CooperativeAudioPlayerManager();
+        var player = manager.createPlayer();
+        var track = new com.sedmelluq.discord.lavaplayer.track.BaseAudioTrack(
+                new com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo("fixture", "test", 20, "fixture", false, null)) {
+            @Override public void process(com.sedmelluq.discord.lavaplayer.track.playback.LocalAudioTrackExecutor executor) throws Exception {
+                executor.getAudioBuffer().consume(new com.sedmelluq.discord.lavaplayer.track.playback.ImmutableAudioFrame(
+                        0, new byte[]{3,7,11},100,com.sedmelluq.discord.lavaplayer.format.StandardAudioDataFormats.DISCORD_OPUS));
+                executor.waitOnEnd();
+            }
+        };
+        var source = java.util.UUID.randomUUID();
+        var listener = java.util.UUID.randomUUID();
+        var audible = new java.util.ArrayList<java.util.UUID>();audible.add(listener);
+        var received = new java.util.ArrayList<Integer>();
+        var audience = new LegacyAudience();
+        var completed = new AtomicBoolean();
+        var sender = new LegacyPacketSender(source, Runnable::run,
+                (opus, sequence) -> LegacyAudioPacket.frame(source,"world",0,0,0,64,sequence,opus),
+                packet -> audience.deliver(packet,audible,(id,bytes) -> {
+                    assertEquals(listener,id);
+                    try { received.add(LegacyAudioPacket.decode(bytes).kind); }
+                    catch(java.io.IOException error) { throw new AssertionError(error); }
+                }));
+        var session = new StreamingSession(sender, failure -> { assertNull(failure);completed.set(true); });
+        try {
+            AudioPlaybackPreparation.start(player,track,null);
+            var playback = StreamingSession.class.getDeclaredField("playback");playback.setAccessible(true);
+            playback.set(session,new LavaPcmFeeder.StreamingPlayback(player,track));
+            var tick = StreamingSession.class.getDeclaredMethod("tick");tick.setAccessible(true);
+            tick.invoke(session);
+            assertEquals(java.util.List.of(LegacyAudioPacket.FRAME),received);
+            audible.clear(); // A listener moves out of range after hearing the source.
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+            while(!completed.get()&&System.nanoTime()<deadline){tick.invoke(session);Thread.sleep(1);}
+            assertTrue(completed.get());
+            assertEquals(java.util.List.of(LegacyAudioPacket.FRAME,LegacyAudioPacket.END),received);
+            session.close();session.close();
+            assertEquals(java.util.List.of(LegacyAudioPacket.FRAME,LegacyAudioPacket.END,LegacyAudioPacket.STOP),received,
+                    "Manual stop after EOF must still reach the original audience exactly once");
+            assertNull(playback.get(session),"A retained stop handle must release the closed decoder");
+        } finally { session.close();player.destroy();manager.shutdown();StreamingSession.shutdown(); }
+    }
 }

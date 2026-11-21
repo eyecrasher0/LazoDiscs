@@ -204,6 +204,12 @@ public final class LazoDiscsText {
     }
 
     private static String text(String key, Object... replacements) {
+        // Keep this narrow refusal visible even in templates without %reason%.
+        for (int i = 0; i + 1 < replacements.length; i += 2) {
+            if ("reason".equals(replacements[i]) && youtubeLoginRequired().equals(replacements[i + 1])) {
+                return youtubeLoginRequired();
+            }
+        }
         ensureLoaded();
         String value = translations.getOrDefault(key, DEFAULTS.getOrDefault(key, key));
         for (int i = 0; i + 1 < replacements.length; i += 2) {
@@ -383,7 +389,6 @@ public final class LazoDiscsText {
 
     private static Map<String, String> defaultTranslations() {
         Map<String, String> map = new LinkedHashMap<>();
-        map.put("audio.youtube_login_required", "YouTube requires sign-in. Please try another link.");
         map.put("source_line.discs", "Discs");
         map.put("now_playing", "Now playing: %title%");
         map.put("common.unknown", "Unknown");

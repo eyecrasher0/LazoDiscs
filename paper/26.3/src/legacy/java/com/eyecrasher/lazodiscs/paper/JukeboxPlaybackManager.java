@@ -44,7 +44,7 @@ public final class JukeboxPlaybackManager implements Listener {
     private final LazoDiscs plugin;
     private final LazoDiscsVoiceAddon voice;
     private final Map<Key, Entry> active = new HashMap<>();
-    private final Map<Key, UUID> completed = new HashMap<>();
+    private final Map<Key, Entry> completed = new HashMap<>();
     private final Map<UUID, Key> insertedThisTick = new HashMap<>();
 
     public JukeboxPlaybackManager(LazoDiscs plugin, LazoDiscsVoiceAddon voice) {
@@ -101,7 +101,7 @@ public final class JukeboxPlaybackManager implements Listener {
                 event.getPlayer().getInventory().setItemInMainHand(remaining);
             else event.getPlayer().getInventory().setItemInOffHand(remaining);
         }
-        completed.remove(Key.of(jukebox.getBlock()));
+        retireCompleted(Key.of(jukebox.getBlock()));
         if (event.getHand() == EquipmentSlot.HAND) {
             UUID player = event.getPlayer().getUniqueId();
             insertedThisTick.put(player, key);
@@ -213,13 +213,15 @@ public final class JukeboxPlaybackManager implements Listener {
         CustomDiscData disc = DiscDataUtil.read(jukebox.getRecord()).orElse(null);
         Entry old = active.get(key);
         if (disc == null) {
-            completed.remove(key);
+            retireCompleted(key);
             stop(key);
             return;
         }
         if (old != null && old.disc.equals(disc)) return;
+        Entry ended = completed.get(key);
+        if (ended != null && disc.id().equals(ended.disc.id())) return;
         stop(key);
-        if (disc.id().equals(completed.get(key))) return;
+        retireCompleted(key);
         if (!voice.isReady()) {
             stopVanilla(jukebox);
             return;
@@ -243,7 +245,7 @@ public final class JukeboxPlaybackManager implements Listener {
 
     private void finish(Key key, Entry expected, String failure) {
         if (!active.remove(key, expected)) return;
-        completed.put(key, expected.disc.id());
+        completed.put(key, expected);
         Block block = key.loadedBlock();
         if (block != null
                 && block.getState() instanceof Jukebox jukebox
@@ -294,6 +296,13 @@ public final class JukeboxPlaybackManager implements Listener {
 
     /** Validate only active sources; never load chunks or scan the world on a timer. */
     public void validate() {
+        completed.entrySet().removeIf(item -> {
+            Block block = item.getKey().loadedBlock();
+            if (block != null && block.getState() instanceof Jukebox jukebox
+                    && DiscDataUtil.read(jukebox.getRecord()).filter(item.getValue().disc::equals).isPresent()) return false;
+            item.getValue().session.stop();
+            return true;
+        });
         var iterator = active.entrySet().iterator();
         while (iterator.hasNext()) {
             var item = iterator.next();
@@ -312,10 +321,21 @@ public final class JukeboxPlaybackManager implements Listener {
     private void stop(Key key) {
         Entry entry = active.remove(key);
         if (entry != null) entry.session.stop();
+        Entry ended = completed.get(key);
+        if (ended != null) ended.session.stop();
+    }
+
+    private void retireCompleted(Key key) {
+        Entry ended = completed.remove(key);
+        if (ended != null) ended.session.stop();
     }
 
     private void stopMatching(java.util.function.Predicate<Key> predicate) {
-        completed.keySet().removeIf(predicate);
+        completed.entrySet().removeIf(entry -> {
+            if (!predicate.test(entry.getKey())) return false;
+            entry.getValue().session.stop();
+            return true;
+        });
         var iterator = active.entrySet().iterator();
         while (iterator.hasNext()) {
             var item = iterator.next();
@@ -329,6 +349,7 @@ public final class JukeboxPlaybackManager implements Listener {
     public void stopAll() {
         active.values().forEach(entry -> entry.session.stop());
         active.clear();
+        for (Entry ended : completed.values()) ended.session.stop();
         completed.clear();
         insertedThisTick.clear();
     }

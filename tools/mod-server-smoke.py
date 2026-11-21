@@ -8,6 +8,7 @@ import argparse,fcntl,hashlib,http.server,importlib.util,io,json,os,re,shutil,so
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 HARNESS_SHA256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+HTTP_FIXTURE_SHA256=hashlib.sha256((ROOT/'paper/26.3/tools/integration.py').read_bytes()).hexdigest()
 spec=importlib.util.spec_from_file_location('audio_fixture',ROOT/'paper/26.3/tools/integration.py');audio=importlib.util.module_from_spec(spec);spec.loader.exec_module(audio)
 def fetch(url,path):
     if not path.exists():
@@ -77,6 +78,9 @@ def main():
 
         pv=run/'config/plasmovoice';pv.mkdir(exist_ok=True);(pv/'server.toml').write_text('[host]\nip = "127.0.0.1"\nport = 0\n')
     requested=[];cold_requested=threading.Event();cold_release=threading.Event();cold_responses=[]
+    cancelled_requested=threading.Event();cancelled_release=threading.Event();cancelled_responses=[]
+    cancelled_disc=str(uuid.uuid4());returned_loaders=set();retired_discs=set();observed_barriers=set()
+    replacement_barrier='LazoDiscs-replacement-'+uuid.uuid4().hex
     with wave.open(io.BytesIO(audio.AudioFixture.audio)) as wav:
         fixture_seconds=wav.getnframes()/wav.getframerate()
         expected_timecode=round(fixture_seconds*1000)-20
@@ -92,6 +96,11 @@ def main():
             path=self.path
             if path=='/short.wav':
                 self.audio=short_wav.getvalue()
+            if path=='/cancelled.wav':
+                cancelled_requested.set()
+                if not cancelled_release.wait(30):
+                    self.send_error(504)
+                    return
             if path=='/cold.wav':
                 cold_requested.set()
                 if not cold_release.wait(30):
@@ -101,6 +110,7 @@ def main():
                 self.path='/test.wav'
             super().do_GET()
             if path=='/cold.wav':cold_responses.append(time.monotonic())
+            if path=='/cancelled.wav':cancelled_responses.append(time.monotonic())
     fixture_http=http.server.ThreadingHTTPServer(('127.0.0.1',0),Fixture);threading.Thread(target=fixture_http.serve_forever,daemon=True).start()
     cold_disc=str(uuid.uuid4())
     url=f'http://127.0.0.1:{fixture_http.server_port}/first.wav';disc='{url:"'+url+'",title:"Runtime fixture",range:64,volume:1.0f,id:"'+str(uuid.uuid4())+'"}'
@@ -118,7 +128,12 @@ def main():
                 for line in process.stdout:
                     output.write(line);output.flush();lines.append(line)
                     if 'Done (' in line and 'For help' in line:ready.set()
+                    retired_match=re.search(r'LazoDiscs smoke retired ([0-9a-f-]{36}) from empty jukebox',line)
+                    if retired_match:retired_discs.add(retired_match[1])
+                    returned_match=re.search(r'LazoDiscs smoke loader returned ([0-9a-f-]{36})',line)
+                    if returned_match:returned_loaders.add(returned_match[1])
                     if f'LazoDiscs smoke retired {cold_disc} from empty jukebox' in line:retired.set()
+                    if any(speaker+' '+replacement_barrier in line for speaker in ('[Server]','<Server>')):observed_barriers.add(replacement_barrier)
                     if any(speaker+' '+barrier_message in line for speaker in ('[Server]','<Server>')):barrier.set()
                     finished=re.search(r'LazoDiscs smoke completed (/\w+\.wav) at (\d+) ms',line)
                     if finished:completed.setdefault(finished[1],[]).append(int(finished[2]))
@@ -172,15 +187,15 @@ def main():
         send('data modify block 0 80 0 RecordItem set value {}')
         send('say '+barrier_message)
         deadline=time.monotonic()+10
-        while not (retired.is_set() and barrier.is_set()) and process.poll() is None and time.monotonic()<deadline:
+        while not (retired.is_set() and barrier.is_set() and cold_disc in returned_loaders) and process.poll() is None and time.monotonic()<deadline:
             assert_clean_playback();time.sleep(.02)
-        if not retired.is_set() or not barrier.is_set() or cold_responses:
+        if not retired.is_set() or not barrier.is_set() or cold_disc not in returned_loaders or cold_responses:
             raise RuntimeError(f'Server did not acknowledge retiring the held source from an empty jukebox: {log}')
         cold_release.set()
         deadline=time.monotonic()+30
-        while len(cold_responses)<2 and process.poll() is None and time.monotonic()<deadline:
+        while len(cold_responses)<1 and process.poll() is None and time.monotonic()<deadline:
             assert_clean_playback();time.sleep(.05)
-        if len(cold_responses)<2:raise RuntimeError(f'Cancelled cold decoder did not finish its HTTP load: {log}')
+        if len(cold_responses)<1:raise RuntimeError(f'Cancelled cold decoder did not finish its HTTP load: {log}')
         # Let the late opened decoder be disposed before any successful playback can
         # warm the class archive and hide an interruption-induced read failure.
         settle=time.monotonic()+2
@@ -188,8 +203,20 @@ def main():
         send('data merge block 0 80 0 {RecordItem:'+item+'}')
         require_full_playback('/first.wav')
         cancelled=item.replace('/first.wav','/cancelled.wav').replace('Runtime fixture','Cancelled fixture')
+        cancelled=re.sub(r'id:"[0-9a-f-]{36}"',f'id:"{cancelled_disc}"',cancelled)
         send('data merge block 0 80 0 {RecordItem:'+cancelled+'}')
+        deadline=time.monotonic()+10
+        while not cancelled_requested.is_set() and process.poll() is None and time.monotonic()<deadline:
+            assert_clean_playback();time.sleep(.02)
+        if not cancelled_requested.is_set():raise RuntimeError(f'Replacement cancellation never reached HTTP: {log}')
         send('data modify block 0 80 0 RecordItem set value {}')
+        send('say '+replacement_barrier)
+        deadline=time.monotonic()+10
+        while not (cancelled_disc in retired_discs and cancelled_disc in returned_loaders and replacement_barrier in observed_barriers) and process.poll() is None and time.monotonic()<deadline:
+            assert_clean_playback();time.sleep(.02)
+        if cancelled_disc not in retired_discs or cancelled_disc not in returned_loaders or replacement_barrier not in observed_barriers or cancelled_responses:
+            raise RuntimeError(f'Replacement source/loader was not retired while HTTP stayed held: {log}')
+        cancelled_release.set()
         second=item.replace('/first.wav','/second.wav')
         send('data merge block 0 80 0 {RecordItem:'+second+'}')
         require_full_playback('/second.wav')
@@ -202,18 +229,19 @@ def main():
         code=process.wait(timeout=60);reader.join(timeout=5)
         if code:raise RuntimeError(f'Mod server exited {code}: {log}')
         assert_clean_playback()
-        if '/cold.wav' in completed or any(completed.get(path)!=[expected_timecode] for path in ('/first.wav','/second.wav')):
+        if '/cold.wav' in completed or '/cancelled.wav' in completed or not cancelled_responses or any(completed.get(path)!=[expected_timecode] for path in ('/first.wav','/second.wav')):
             raise RuntimeError(f'Expected two distinct full playbacks and no completion of the cold source: {log}')
         if hashlib.sha256(Path(__file__).read_bytes()).hexdigest()!=HARNESS_SHA256:raise RuntimeError('Harness changed during verification; rerun')
+        if hashlib.sha256((ROOT/'paper/26.3/tools/integration.py').read_bytes()).hexdigest()!=HTTP_FIXTURE_SHA256:raise RuntimeError('HTTP fixture changed during verification; rerun')
         result={'platform':platform,'minecraft':mc,'sha256':digest,'voice':voice['version'],'voice_sha512':hashlib.sha512((mods/'PlasmoVoice.jar').read_bytes()).hexdigest(),'fresh_world':world,'ready':True,'audio_requests':requested,
-                'harness_sha256':HARNESS_SHA256,'console_sha256':hashlib.sha256(log.read_bytes()).hexdigest(),'playback_start_line':playback_start_line,
+                'harness_sha256':HARNESS_SHA256,'http_fixture_sha256':HTTP_FIXTURE_SHA256,'console_sha256':hashlib.sha256(log.read_bytes()).hexdigest(),'playback_start_line':playback_start_line,
                 'startup_external_error_events':external_startup_errors,'cold_cancelled':True,'cold_requests':requested.count('/cold.wav'),
-                'cold_disc':cold_disc,'command_barrier':barrier_message,'completed_playbacks':2,'fixture_seconds':fixture_seconds,
+                'cold_disc':cold_disc,'command_barrier':barrier_message,'cancelled_disc':cancelled_disc,'replacement_barrier':replacement_barrier,'cancelled_requests':requested.count('/cancelled.wav'),'retired_loaders':sorted(returned_loaders),'completed_playbacks':2,'fixture_seconds':fixture_seconds,
                 'expected_timecode_ms':expected_timecode,'final_timecodes_ms':completed,'exit':code,'log':str(log),
                 'scope':'Real final-JAR loader startup, observed empty-slot retirement of a held cold source, two natural full decoded playbacks with rapid replacement/extraction, one short-track duration control, and clean shutdown'}
         (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
     finally:
-        cold_release.set()
+        cold_release.set();cancelled_release.set()
         if process is not None and process.poll() is None:
             process.terminate()
             try:process.wait(timeout=15)

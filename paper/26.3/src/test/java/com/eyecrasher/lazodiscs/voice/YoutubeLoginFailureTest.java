@@ -50,12 +50,24 @@ class YoutubeLoginFailureTest {
         try {
             Files.createDirectories(directory.resolve("lang"));
             // A language override must not replace the mandated English YouTube reason.
-            Files.writeString(directory.resolve("lang/en_us.toml"), "command.burn_failed = \"Could not burn disc: %reason%\"\naudio.youtube_login_required = \"Custom translated refusal\"\n");
+            Files.writeString(directory.resolve("lang/en_us.toml"), "command.burn_failed = \"Could not burn disc\"\naudio.youtube_login_required = \"Custom translated refusal\"\n");
             assertEquals("YouTube requires sign-in. Please try another link.",
                     LazoDiscsVoiceAddon.messageOf(refused()));
             assertEquals("YouTube requires sign-in. Please try another link.",
                     LazoDiscsVoiceAddon.messageOf(new RuntimeException("load failed", refused())));
             assertEquals("Connection reset", LazoDiscsVoiceAddon.messageOf(new IOException("Connection reset")));
+            Files.writeString(directory.resolve("lang/en_us.toml"),
+                    "command.burn_failed = \"Custom burn failure\"\n"
+                    + "audio.load_failed = \"Custom playback failure\"\n"
+                    + "search.failed = \"Custom search failure\"\n");
+            com.eyecrasher.lazodiscs.text.LazoDiscsText.reload();
+            var plain = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText();
+            var reason = YoutubeLoginFailure.PLAYER_MESSAGE;
+            assertEquals(reason, plain.serialize(com.eyecrasher.lazodiscs.text.LazoDiscsText.burnFailed(reason)));
+            assertEquals(reason, plain.serialize(com.eyecrasher.lazodiscs.text.LazoDiscsText.audioLoadFailed("Fixture", reason)));
+            assertEquals(reason, plain.serialize(com.eyecrasher.lazodiscs.text.LazoDiscsText.searchFailed(reason)));
+            assertEquals("Custom burn failure", plain.serialize(com.eyecrasher.lazodiscs.text.LazoDiscsText.burnFailed("Connection reset")));
+
         } finally {
             field.set(null, previous);
         }

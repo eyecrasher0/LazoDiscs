@@ -138,7 +138,9 @@ public final class JukeboxPlaybackManager {
         if (current == null || current.source() != source) {
             return;
         }
-        if (active.remove(sourceKey, current)) {
+        // Keep this source's stop handle until item change/unload. EOF can precede
+        // the last client PCM; the entry owns no running decoder after completion.
+        if (active.get(sourceKey) == current) {
             LazoDiscs.LOGGER.info(
                     "Finished LazoDisc '{}' at {} ({})",
                     current.disc().title(),

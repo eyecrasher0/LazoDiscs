@@ -8,18 +8,33 @@ public final class TrackMatchScorer {
     private TrackMatchScorer() {}
 
     public static boolean matchesTitle(String rawTitle, String expectedTitle) {
-        if (expectedTitle == null) return false;
-        // Spotify adds release/version labels after the song name in some titles.
-        String expected =
-                normalize(
-                        expectedTitle.replaceFirst(
-                                "(?i)\\s+-\\s+(?:instrumental|sped up|slowed|bass boosted|remix|"
-                                        + "remaster(?:ed)?|live|acoustic|radio edit|original mix|"
-                                        + "karaoke|nightcore|extended|8d)(?:\\s|$).*",
-                                ""));
-        String actual = normalize(rawTitle);
-        if (expected.isBlank() || actual.isBlank()) return false;
-        return (" " + actual + " ").contains(" " + expected + " ");
+        String expected = titleKey(expectedTitle);
+        return !expected.isBlank() && titleKey(rawTitle).equals(expected);
+    }
+
+    public static boolean matchesTitle(String rawTitle, TrackMetadata metadata) {
+        if (metadata == null) return false;
+        if (matchesTitle(rawTitle, metadata.title())) return true;
+        // A known artist prefix is display metadata, not extra song-title words.
+        if (rawTitle == null) return false;
+        for (String artist : metadata.artists()) {
+            String prefix = "(?iu)^\\s*" + java.util.regex.Pattern.quote(artist) + "\\s+[-–—:]\\s+";
+            String title = rawTitle.replaceFirst(prefix, "");
+            if (!title.equals(rawTitle) && matchesTitle(title, metadata.title())) return true;
+        }
+        return false;
+    }
+
+    private static String titleKey(String raw) {
+        if (raw == null) return "";
+        String decoration = "(?:official(?: music)? (?:audio|video)|official visuali[sz]er|"
+                + "audio|music video|lyric(?:s| video)?|visuali[sz]er|hd|4k|"
+                + "remaster(?:ed)?(?:\\s+\\d{4})?)";
+        String title = raw.replaceAll("(?i)\\s*[\\[(]\\s*" + decoration + "\\s*[\\])]", " ")
+                .replaceFirst("(?i)\\s+[-–—]\\s+" + decoration + "\\s*$", "")
+                .replaceFirst("(?i)\\s+official(?: music)? (?:audio|video)\\s*$", "");
+        return title.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{Nd}]+", " ")
+                .replaceAll("\\s+", " ").trim();
     }
 
     public static int score(

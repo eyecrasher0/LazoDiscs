@@ -18,6 +18,11 @@ public final class AudioPlaybackPreparation {
 
     public static void start(AudioPlayer player, AudioTrack track,
                              Consumer<FriendlyException> playbackFailure) throws InterruptedException {
+        start(player, track, playbackFailure, () -> false);
+    }
+
+    public static void start(AudioPlayer player, AudioTrack track, Consumer<FriendlyException> playbackFailure,
+                             java.util.function.BooleanSupplier cancelled) throws InterruptedException {
         Object gate = new Object();
         FriendlyException[] failure = {null};
         boolean[] ready = {false};
@@ -50,6 +55,7 @@ public final class AudioPlaybackPreparation {
             player.playTrack(track);
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
             while (true) {
+                if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
                 synchronized (gate) {
                     AudioTrackExecutor executor = track instanceof InternalAudioTrack
                             ? ((InternalAudioTrack) track).getActiveExecutor() : null;
@@ -69,7 +75,7 @@ public final class AudioPlaybackPreparation {
                             new TimeoutException("The decoder did not produce its first frame within the preparation deadline"));
                 }
                 try { Thread.sleep(5); }
-                catch (InterruptedException cancelled) {
+                catch (InterruptedException interruption) {
                     // Stopping LavaPlayer interrupts its decoder. On old Forge, interrupting
                     // a first class read closes the mod's shared archive for every thread.
                     // Finish bounded preparation before disposing an interrupted load.

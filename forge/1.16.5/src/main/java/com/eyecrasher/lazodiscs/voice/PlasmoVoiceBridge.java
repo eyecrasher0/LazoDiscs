@@ -238,7 +238,7 @@ public final class PlasmoVoiceBridge {
                                                 error -> {
                                                     if (!stopped.get()) notifyLoadFailure(
                                                             level, new BlockPos(initialPos), disc, messageOf(error));
-                                                });
+                                                }, stopped::get);
 
                                 synchronized (lifecycleLock) {
                                     if (stopped.get()) {
@@ -307,6 +307,8 @@ public final class PlasmoVoiceBridge {
                                 if (!manualStop.get()) {
                                     notifyFinished.run();
                                 }
+                            } finally {
+                                if (manualStop.get()) PlaybackProbe.loaderReturned(disc.id());
                             }
                         },
                         () -> {
@@ -420,7 +422,7 @@ public final class PlasmoVoiceBridge {
                                                 error -> {
                                                     if (!stopped.get()) notifyLoadFailure(
                                                             level, new BlockPos(pos), disc, messageOf(error));
-                                                });
+                                                }, stopped::get);
                                 synchronized (lifecycleLock) {
                                     if (stopped.get()) {
                                         playback.close();
@@ -474,6 +476,8 @@ public final class PlasmoVoiceBridge {
                                 stopped.set(true);
                                 cleanup.run();
                                 if (!manualStop.get()) notifyFinished.run();
+                            } finally {
+                                if (manualStop.get()) PlaybackProbe.loaderReturned(disc.id());
                             }
                         },
                         () -> {
@@ -634,7 +638,7 @@ public final class PlasmoVoiceBridge {
                                                 error -> {
                                                     if (!stopped.get()) notifyLoadFailure(
                                                             level, pos, disc, messageOf(error));
-                                                });
+                                                }, stopped::get);
 
                                 synchronized (lifecycleLock) {
                                     if (stopped.get()) {
@@ -712,6 +716,8 @@ public final class PlasmoVoiceBridge {
                                 if (!manualStop.get()) {
                                     notifyFinished.run();
                                 }
+                            } finally {
+                                if (manualStop.get()) PlaybackProbe.loaderReturned(disc.id());
                             }
                         },
                         () -> {

@@ -242,18 +242,21 @@ def bukkitSources = tasks.register('bukkitSources', Sync) {
                 end = text.indexOf('    private void stop(Key key)', start)
                 text = text.substring(0, start) + '''
     public void validate() {
-        active.forEach((key, expected) -> {
-            World world = Bukkit.getWorld(key.world);
-            if (world == null) { if (active.remove(key, expected)) expected.session.stop(); return; }
-            plugin.onRegion(new Location(world, key.x, key.y, key.z), () -> {
-                if (active.get(key) != expected) return;
-                Block block = key.loadedBlock();
-                if (block == null || !(block.getState() instanceof Jukebox jukebox)
-                        || DiscDataUtil.read(jukebox.getRecord()).filter(expected.disc::equals).isEmpty()) {
-                    if (active.remove(key, expected)) expected.session.stop();
-                }
+        // Finished Voice1 sources still own a terminal stop handle until item retirement.
+        for (Map<Key, Entry> entries : java.util.List.of(active, completed)) {
+            entries.forEach((key, expected) -> {
+                World world = Bukkit.getWorld(key.world);
+                if (world == null) { if (entries.remove(key, expected)) expected.session.stop(); return; }
+                plugin.onRegion(new Location(world, key.x, key.y, key.z), () -> {
+                    if (entries.get(key) != expected) return;
+                    Block block = key.loadedBlock();
+                    if (block == null || !(block.getState() instanceof Jukebox jukebox)
+                            || DiscDataUtil.read(jukebox.getRecord()).filter(expected.disc::equals).isEmpty()) {
+                        if (entries.remove(key, expected)) expected.session.stop();
+                    }
+                });
             });
-        });
+        }
     }
 
 ''' + text.substring(end)

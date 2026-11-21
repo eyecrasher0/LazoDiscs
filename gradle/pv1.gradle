@@ -1,10 +1,5 @@
 def pv1Sources = tasks.register('pv1Sources', Sync) {
-    from('src/main/java') {
-        exclude 'com/eyecrasher/lazodiscs/LazoDiscsServerBootstrap.java'
-        exclude 'com/eyecrasher/lazodiscs/voice/PlasmoVoiceBridge.java'
-        exclude 'com/eyecrasher/lazodiscs/voice/LazoDiscsVoiceAddon.java'
-        exclude 'com/eyecrasher/lazodiscs/compat/sophisticatedbackpacks/LazoDiscsDiscHandler.java'
-    }
+    from('src/main/java')
     from('../../common/variants/pv1/java')
     from("../../common/variants/pv1/${projectDir.parentFile.name}")
     into layout.buildDirectory.dir('generated/sources/pv1')

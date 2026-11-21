@@ -17,6 +17,7 @@ public final class PlasmoVoiceBridge {
     }
     public PlayingVoiceSource startEntitySource(ServerLevel level, int entityId, Vec3 center, CustomDiscData disc, Runnable finished) {
         UUID source = UUID.randomUUID();
+        var audience = new LegacyAudience();
         var position = new java.util.concurrent.atomic.AtomicReference<>(new Position(level, center));
         var stream = new StreamingSession(new LegacyPacketSender(source, task -> level.getServer().execute(task),
                 (opus, sequence) -> {
@@ -28,7 +29,7 @@ public final class PlasmoVoiceBridge {
                 }, packet -> {
                     Position current = position.get();
                     Vec3 at = packet.kind == LegacyAudioPacket.FRAME ? new Vec3(packet.x, packet.y, packet.z) : current.center;
-                    LegacyNetwork.broadcast(current.level, at, disc.range(), packet.encode());
+                    LegacyNetwork.broadcast(current.level, at, disc.range(), packet, audience);
                 }), failure -> level.getServer().execute(() -> {
             if (failure != null) {
                 LazoDiscs.LOGGER.warn("Could not play '{}': {}", disc.title(), failure);

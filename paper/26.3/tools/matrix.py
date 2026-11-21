@@ -66,7 +66,8 @@ def main():
             digest = hashlib.sha256(jar.read_bytes()).hexdigest()
             if digest != result["jar_sha256"]:
                 raise RuntimeError("Artifact changed after integration test")
-            row.update(status="pass", passed=result["passed"], sha256=digest, artifact=str(jar))
+            row.update(status="pass", passed=result["passed"], sha256=digest, artifact=str(jar),
+                       **{key:result[key] for key in ["fixture_sha256", "harness_sha256", "server_sha256", "voice_sha512", "console_sha256"]})
         except Exception as error:
             row.update(status="fail", error=str(error))
         print(json.dumps(row), flush=True)

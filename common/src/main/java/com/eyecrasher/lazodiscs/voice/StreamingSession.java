@@ -30,6 +30,8 @@ public final class StreamingSession implements AutoCloseable {
     private final Sink sink;
     private final Consumer<String> finished;
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final AtomicBoolean manualStop = new AtomicBoolean();
+    private final AtomicBoolean sinkStopped = new AtomicBoolean();
     private volatile LavaPcmFeeder.StreamingPlayback playback;
     private volatile Future<?> load, sender;
     private volatile String failure;
@@ -59,7 +61,7 @@ public final class StreamingSession implements AutoCloseable {
             try {
                 if (closed.get()) return;
                 var opened = LavaPcmFeeder.openStream(disc.url(), disc.title(), disc.volume(),
-                        error -> { if (!closed.get()) failure = messageOf(error); });
+                        error -> { if (!closed.get()) failure = messageOf(error); }, closed::get);
                 synchronized (this) {
                     if (closed.get()) { opened.close(); return; }
                     playback = opened;
@@ -74,6 +76,7 @@ public final class StreamingSession implements AutoCloseable {
                 Thread.currentThread().interrupt();
                 if (!closed.get()) finish("Audio loading interrupted", false);
             } catch (Exception | LinkageError error) { fail(error); }
+            finally { if (closed.get()) PlaybackProbe.loaderReturned(disc.id()); }
         }, () -> finish(LazoDiscsText.audioLoadBusy(), false));
         if (closed.get()) load.cancel(false);
     }
@@ -98,7 +101,12 @@ public final class StreamingSession implements AutoCloseable {
         finish(messageOf(error), false);
     }
     private void finish(String failure, boolean manual) {
-        if (!closed.compareAndSet(false, true)) return;
+        if (manual) manualStop.set(true);
+        if (!closed.compareAndSet(false, true)) {
+            // EOF retires the decoder, but a later ejection must still discard client PCM.
+            if (manual) synchronized (this) { stopSink(); }
+            return;
+        }
         ACTIVE.remove(this);
         synchronized (this) {
             // Forge reads mod classes through a shared interruptible archive channel.
@@ -106,15 +114,18 @@ public final class StreamingSession implements AutoCloseable {
             // Closed checks discard late results; the resolver already has a timeout.
             if (manual && load != null) load.cancel(false);
             if (sender != null) sender.cancel(false);
-            try { if (playback != null) playback.close(); }
+            try { if (playback != null) { playback.close(); playback = null; } }
             catch (RuntimeException | LinkageError error) { LazoDiscs.LOGGER.warn("Could not close audio decoder", error); }
             try {
-                if (!manual && failure == null && sequence > 0) sink.finish();
-                else sink.close();
+                if (!manualStop.get() && failure == null && sequence > 0) sink.finish();
+                else stopSink();
             }
             catch (RuntimeException | LinkageError error) { LazoDiscs.LOGGER.warn("Could not remove audio source", error); }
         }
-        if (!manual) finished.accept(failure);
+        if (!manualStop.get()) finished.accept(failure);
+    }
+    private void stopSink() {
+        if (sinkStopped.compareAndSet(false, true)) sink.close();
     }
     @Override public void close() { finish(null, true); }
     public static void shutdown() {

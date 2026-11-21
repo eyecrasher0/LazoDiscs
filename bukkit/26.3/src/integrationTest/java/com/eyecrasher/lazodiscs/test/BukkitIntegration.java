@@ -201,23 +201,56 @@ public final class BukkitIntegration extends JavaPlugin {
     private void cancelLoad() {
         check(((Number) field(completedStream, "sequence")).longValue() >= 145, "HTTP WAV decoded and 150 Opus frames passed to Voice transport");
         check(DiscDataUtil.read(((Jukebox) location.getBlock().getState()).getRecord()).isPresent(), "completion keeps the recorded item");
-        insert(audio.replace("test.wav", "slow.wav"));
-        waitRegion("pending load tracked", () -> activeCount() == 1, 80, () -> {
+        ((Jukebox) location.getBlock().getState()).eject();manager.validate();
+        waitRegion("ejection after EOF still retires the client tail", () -> ((AtomicBoolean) field(completedStream, "manualStop")).get(), 80, this::cancelPendingLoad);
+    }
+    private void cancelPendingLoad() {
+        insert(audio.replace("test.wav", "held-cancel.wav"));
+        waitRegion("cancel request is actually in flight", () -> control("cancel-started"), 80, () -> {
+            Object stream = pendingStream();
+            var load = (com.eyecrasher.lazodiscs.voice.AudioLoadTask) field(stream, "load");
             Jukebox jukebox = (Jukebox) location.getBlock().getState(); jukebox.eject();
             manager.validate();
-            waitRegion("ejection cancels decoder and native source", () -> activeCount() == 0 && streamCount() == 0, 100, this::shutdownCheck);
+            waitRegion("ejection retires source and loader while HTTP remains held",
+                    () -> activeCount() == 0 && streamCount() == 0 && load.hasExited(), 100, () -> {
+                check(!control("cancel-release") && !control("cancel-returned"), "cancellation precedes HTTP response");
+                release("cancel");
+                waitRegion("cancelled HTTP response released", () -> control("cancel-returned"), 100, () ->
+                        unchangedAfterRelease(stream, 20, this::shutdownCheck));
+            });
         });
     }
+    private Path controls() { return Path.of(System.getProperty("lazodiscs.testHttpControl")); }
+    private boolean control(String name) { return Files.exists(controls().resolve(name)); }
+    private void release(String phase) throws Exception { Files.createFile(controls().resolve(phase + "-release")); }
+    private Object pendingStream() {
+        Object entry = ((Map<?,?>) field(manager, "active")).values().iterator().next();
+        return field(field(entry, "session"), "stream");
+    }
+    private void unchangedAfterRelease(Object stream, int ticks, Checked next) {
+        check(activeCount() == 0 && streamCount() == 0 && field(stream, "playback") == null
+                && ((Number) field(stream, "sequence")).longValue() == 0, "released retired load cannot recreate playback");
+        if (ticks == 0) guarded(next);
+        else scheduler.region(location, () -> guarded(() -> unchangedAfterRelease(stream, ticks - 1, next)));
+    }
     private void shutdownCheck() {
-        insert(audio.replace("test.wav", "slow.wav"));
-        waitRegion("shutdown fixture starts", () -> activeCount() == 1, 80, () -> scheduler.global(() -> guarded(() -> {
-            Bukkit.getPluginManager().disablePlugin(plugin);
-            check(activeCount() == 0 && streamCount() == 0, "disable releases all active sources and decoder work");
-            check(((Map<?,?>) field(field(plugin, "commands"), "pending")).isEmpty(), "disable clears pending commands");
-            var commandMap = (org.bukkit.command.CommandMap) Bukkit.getServer().getClass().getMethod("getCommandMap").invoke(Bukkit.getServer());
-            check(commandMap.getCommand("lazodiscs:lazodisc") == null, "disable removes command aliases");
-            finish(null);
-        })));
+        insert(audio.replace("test.wav", "held-shutdown.wav"));
+        waitRegion("shutdown request is actually in flight", () -> control("shutdown-started"), 80, () -> {
+            Object stream = pendingStream();
+            var load = (com.eyecrasher.lazodiscs.voice.AudioLoadTask) field(stream, "load");
+            scheduler.global(() -> guarded(() -> {
+                Bukkit.getPluginManager().disablePlugin(plugin);
+                waitGlobal("disable retires source and loader while HTTP remains held", () -> activeCount() == 0 && streamCount() == 0 && load.hasExited(), 100, () -> {
+                    check(!control("shutdown-release") && !control("shutdown-returned"), "disable precedes HTTP response");
+                    check(((Map<?,?>) field(field(plugin, "commands"), "pending")).isEmpty(), "disable clears pending commands");
+                    var commandMap = (org.bukkit.command.CommandMap) Bukkit.getServer().getClass().getMethod("getCommandMap").invoke(Bukkit.getServer());
+                    check(commandMap.getCommand("lazodiscs:lazodisc") == null, "disable removes command aliases");
+                    release("shutdown");
+                    waitRegion("disabled HTTP response released", () -> control("shutdown-returned"), 100, () ->
+                            unchangedAfterRelease(stream, 20, () -> finish(null)));
+                });
+            }));
+        });
     }
     private static Object defaultValue(Class<?> type) {
         if (type == boolean.class) return false;

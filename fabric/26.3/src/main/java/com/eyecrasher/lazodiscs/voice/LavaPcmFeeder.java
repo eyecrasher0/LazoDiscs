@@ -112,18 +112,25 @@ public final class LavaPcmFeeder {
 
     public static StreamingPlayback openStream(String rawUrl, String title, float volume,
             java.util.function.Consumer<FriendlyException> playbackFailure) throws InterruptedException {
+        return openStream(rawUrl, title, volume, playbackFailure, () -> false);
+    }
+
+    public static StreamingPlayback openStream(String rawUrl, String title, float volume,
+            java.util.function.Consumer<FriendlyException> playbackFailure,
+            java.util.function.BooleanSupplier cancelled) throws InterruptedException {
+        if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
         // Stored or externally supplied disc data must obey current URL restrictions too.
         ResolveRequest request = resolveIdentifier(DiscDataUtil.validateUrl(rawUrl), title);
         LazoDiscs.LOGGER.info(
                 "LazoDiscs resolving streaming audio with LavaPlayer: '{}' -> '{}'",
                 rawUrl,
                 request.identifier());
-        AudioTrack track = loadTrack(PLAYER_MANAGER, request.identifier(), request.metadata());
+        AudioTrack track = loadTrack(PLAYER_MANAGER, request.identifier(), request.metadata(), cancelled);
         validateStreamingTrackLength(track);
 
         AudioPlayer player = PLAYER_MANAGER.createPlayer();
         player.setVolume(Math.max(0, Math.round(Math.max(0.0F, volume) * 100.0F)));
-        AudioPlaybackPreparation.start(player, track, playbackFailure);
+        AudioPlaybackPreparation.start(player, track, playbackFailure, cancelled);
         return new StreamingPlayback(player, track);
     }
 
@@ -214,17 +221,23 @@ public final class LavaPcmFeeder {
     private static AudioTrack loadTrack(
             AudioPlayerManager manager, String identifier, TrackMetadata metadata)
             throws InterruptedException {
+        return loadTrack(manager, identifier, metadata, () -> false);
+    }
+
+    private static AudioTrack loadTrack(AudioPlayerManager manager, String identifier, TrackMetadata metadata,
+            java.util.function.BooleanSupplier cancelled) throws InterruptedException {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicReference<AudioTrack> result = new AtomicReference<>();
         AtomicReference<Throwable> failure = new AtomicReference<>();
 
-        manager.loadItemOrdered(
+        java.util.concurrent.Future<?> pendingLoad = manager.loadItemOrdered(
                 "lazodiscs-load:" + identifier,
                 identifier,
                 new AudioLoadResultHandler() {
                     @Override
                     public void trackLoaded(AudioTrack track) {
-                        if (metadata == null || TrackMatchScorer.matchesTitle(track.getInfo().title, metadata.title())) {
+                        if (cancelled.getAsBoolean()) { latch.countDown(); return; }
+                        if (metadata == null || TrackMatchScorer.matchesTitle(track.getInfo().title, metadata)) {
                             result.set(track);
                         } else {
                             failure.set(new RuntimeException(LazoDiscsText.audioNoMatches()));
@@ -234,6 +247,7 @@ public final class LavaPcmFeeder {
 
                     @Override
                     public void playlistLoaded(AudioPlaylist playlist) {
+                        if (cancelled.getAsBoolean()) { latch.countDown(); return; }
                         if (metadata != null) {
                             AudioTrack selected = selectBestTrack(playlist.getTracks(), metadata);
                             if (selected == null) {
@@ -264,17 +278,28 @@ public final class LavaPcmFeeder {
                     }
                 });
 
-        int timeout = LazoDiscsConfig.LAVAPLAYER_LOAD_TIMEOUT_SECONDS.get();
-        if (!latch.await(timeout, TimeUnit.SECONDS)) {
-            throw new RuntimeException(LazoDiscsText.audioResolveTimedOut(timeout));
+        try {
+            int timeout = LazoDiscsConfig.LAVAPLAYER_LOAD_TIMEOUT_SECONDS.get();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeout);
+            while (!latch.await(25, TimeUnit.MILLISECONDS)) {
+                if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
+                if (System.nanoTime() >= deadline) break;
+            }
+            if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
+            if (latch.getCount() != 0) {
+                throw new RuntimeException(LazoDiscsText.audioResolveTimedOut(timeout));
+            }
+            if (failure.get() != null) {
+                throw new RuntimeException(messageOf(failure.get()), failure.get());
+            }
+            if (result.get() == null) {
+                throw new RuntimeException(LazoDiscsText.audioNoMatches());
+            }
+            return result.get();
+        } finally {
+            // Cancel queued resolver work without interrupting an active archive read.
+            if (cancelled.getAsBoolean()) pendingLoad.cancel(false);
         }
-        if (failure.get() != null) {
-            throw new RuntimeException(messageOf(failure.get()), failure.get());
-        }
-        if (result.get() == null) {
-            throw new RuntimeException(LazoDiscsText.audioNoMatches());
-        }
-        return result.get();
     }
 
     private static void addSearchResult(List<SearchResult> results, AudioTrack track) {
@@ -320,7 +345,7 @@ public final class LavaPcmFeeder {
                     info.author,
                     info.length);
             // Duration and artist hints must not select a completely different song.
-            if (!TrackMatchScorer.matchesTitle(info.title, metadata.title())) continue;
+            if (!TrackMatchScorer.matchesTitle(info.title, metadata)) continue;
             if (score > bestScore) {
                 bestScore = score;
                 best = track;

@@ -17,6 +17,10 @@ public final class PlaybackProbe {
         LazoDiscs.LOGGER.info("LazoDiscs smoke completed {} at {} ms", path, track.getPosition());
     }
 
+    public static void loaderReturned(UUID disc) {
+        if (ENABLED) LazoDiscs.LOGGER.info("LazoDiscs smoke loader returned {}", disc);
+    }
+
     public static void emptySlot(UUID disc) {
         if (ENABLED) LazoDiscs.LOGGER.info("LazoDiscs smoke retired {} from empty jukebox", disc);
     }

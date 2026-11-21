@@ -16,6 +16,9 @@ def main():
     parser.add_argument('--output-root', type=Path, default=ROOT/'build-matrix')
     parser.add_argument('--work-root', type=Path, default=ROOT/'.agents/server-tests')
     parser.add_argument('--server-jar', type=Path, help='Locally built Spigot server (BuildTools); required for Spigot')
+    harness_sha=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    http_sha=hashlib.sha256((ROOT/'paper/26.3/tools/integration.py').read_bytes()).hexdigest()
+    config_sha=hashlib.sha256((ROOT/'bukkit/26.3/src/main/resources/config.yml').read_bytes()).hexdigest()
     args = parser.parse_args()
     entry = next(r for r in json.loads((ROOT/'compatibility.json').read_text())['entries'] if (r['platform'],r['minecraft'])==(args.platform,args.minecraft))
     key = f'{args.platform}/{args.minecraft}'
@@ -69,10 +72,12 @@ def main():
         with zipfile.ZipFile(voice_jar) as archive: config=archive.read('config.yml').decode().replace('0.0.0.0','127.0.0.1')
         (plugins/'PlasmoVoice/config.yml').write_text(config)
     else: (plugins/'PlasmoVoice/config.toml').write_text('[host]\nip = "127.0.0.1"\nport = 0\n')
+    controls=run/'http-controls';controls.mkdir()
+    fixture_module.AudioFixture.controls=controls
     http_server=http.server.ThreadingHTTPServer(('127.0.0.1',0),fixture_module.AudioFixture)
     threading.Thread(target=http_server.serve_forever,daemon=True).start()
     result=run/'result.json'
-    command=[args.java,'-XX:ActiveProcessorCount=2','-Xms512M','-Xmx1536M','-Dterminal.jline=false','-Dterminal.ansi=false',f'-Dlazodiscs.testAudioUrl=http://127.0.0.1:{http_server.server_port}/test.wav',f'-Dlazodiscs.testResult={result}','-jar','server.jar','--nogui']
+    command=[args.java,'-XX:ActiveProcessorCount=2','-Xms512M','-Xmx1536M','-Dterminal.jline=false','-Dterminal.ansi=false',f'-Dlazodiscs.testHttpControl={controls}',f'-Dlazodiscs.testAudioUrl=http://127.0.0.1:{http_server.server_port}/test.wav',f'-Dlazodiscs.testResult={result}','-jar','server.jar','--nogui']
     print(f'Running {key} build {pin["build"]}, PV {voice["version"]}: {run / "console.log"}',flush=True)
     try:
         with (run/'console.log').open('w') as log:
@@ -89,8 +94,12 @@ def main():
                 shutil.move(str(folder),str(cache/name)); folder.symlink_to(cache/name,target_is_directory=True)
         if code!=0 or not result.is_file(): raise RuntimeError(f'Server exit {code}, no fixture result: {run / "console.log"}')
         report=json.loads(result.read_text())
+        if hashlib.sha256(Path(__file__).read_bytes()).hexdigest()!=harness_sha or hashlib.sha256((ROOT/'paper/26.3/tools/integration.py').read_bytes()).hexdigest()!=http_sha:
+            raise RuntimeError('Verifier inputs changed during integration; rerun')
+        if hashlib.sha256(fixture.read_bytes()).hexdigest()!=tested_fixture_hash or hashlib.sha256((ROOT/'bukkit/26.3/src/main/resources/config.yml').read_bytes()).hexdigest()!=config_sha:
+            raise RuntimeError('Fixture/config inputs changed during integration; rerun')
         if hashlib.sha256(release.read_bytes()).hexdigest()!=tested_hash: raise RuntimeError('Release JAR changed during integration')
-        report.update(platform=args.platform,minecraft=args.minecraft,build=pin['build'],voice=voice['version'],jar_sha256=tested_hash,fixture_sha256=tested_fixture_hash,server_sha256=tested_server_hash,voice_sha512=tested_voice_hash,log=str(saved_run/'console.log'))
+        report.update(harness_sha256=harness_sha,http_fixture_sha256=http_sha,config_sha256=config_sha,console_sha256=hashlib.sha256((run/'console.log').read_bytes()).hexdigest(),platform=args.platform,minecraft=args.minecraft,build=pin['build'],voice=voice['version'],jar_sha256=tested_hash,fixture_sha256=tested_fixture_hash,server_sha256=tested_server_hash,voice_sha512=tested_voice_hash,log=str(saved_run/'console.log'))
         (cache/'result.json').write_text(json.dumps(report,indent=2)+'\n'); print(json.dumps(report,indent=2))
         if report['failure'] is not None: raise SystemExit(1)
     finally:

@@ -115,9 +115,51 @@ public final class PackagedLoggingSmoke {
                 logType.getMethod("debug", Object.class).invoke(wire, "Authorization: Bearer wire-secret");
                 require(EVENTS.isEmpty(), "Raw HTTP credentials reached a log handler");
             } finally { poolType.getMethod("shutdown").invoke(pool); }
+            youtubeEncodedFormats(loader, loggerType, capture);
             realHttpRequest(loader, httpPrefix, capture);
             System.out.println("PASS shipped LavaPlayer/HTTP log redaction, preserved exceptions, scoped YouTube warning and disable cleanup");
         }
+    }
+
+    private static void youtubeEncodedFormats(ClassLoader loader, Class<?> loggerType, Handler capture) throws Exception {
+        String owner="dev.lavalink.youtube.clients.skeleton.StreamingNonMusicClient";
+        Logger host=Logger.getLogger(owner);host.setUseParentHandlers(false);host.setLevel(Level.ALL);host.addHandler(capture);
+        String cipher="url="+java.net.URLEncoder.encode(URL_WITH_SECRET,"UTF-8")+"&s=separate-signature-secret&sp=sig";
+        String json="{\"itag\":1,\"contentLength\":100,\"bitrate\":64000,\"mimeType\":\"audio/webm; charset=no-such-charset\",\"signatureCipher\":\""+cipher+"\"}";
+        Class<?> browser=loader.loadClass("com.sedmelluq.discord.lavaplayer.tools.JsonBrowser");
+        Object format=browser.getMethod("parse",String.class).invoke(null,json);
+        Class<?> parser=loader.loadClass(owner);
+        Method extract=parser.getDeclaredMethod("extractFormat",browser,List.class,boolean.class);extract.setAccessible(true);
+        Object client=loader.loadClass("dev.lavalink.youtube.clients.MWebWithThumbnail").getConstructor().newInstance();
+        require(Boolean.FALSE.equals(extract.invoke(client,format,new ArrayList<>(),false)),"Invalid format did not exercise the actual parser rejection");
+        require(!EVENTS.isEmpty(),"Actual YouTube format parser emitted no DEBUG rejection");
+        boolean debug=false;
+        for(LogRecord event:EVENTS){
+            require(event.getLevel().equals(Level.FINE),"Parser DEBUG level changed");debug=true;
+            require(event.getMessage().contains("Failed to parse format"),"Parser rejection details were lost");
+            noEncodedCredentials(event.getMessage());
+        }
+        EVENTS.clear();require(debug,"No parser DEBUG event");
+        Object missingLength=browser.getMethod("parse",String.class).invoke(null,json.replace("\"contentLength\":100,",""));
+        require(Boolean.TRUE.equals(extract.invoke(client,missingLength,new ArrayList<>(),false)),"Missing-length control did not follow its real parser branch");
+        require(EVENTS.size()==1&&EVENTS.get(0).getLevel().equals(Level.FINE),"Missing-length parser DEBUG was lost");
+        LogRecord formatDebug=EVENTS.remove(0);
+        require(formatDebug.getMessage().contains("no contentLength")&&formatDebug.getMessage().contains("64000"),"Benign format JSON details were lost");
+        noEncodedCredentials(formatDebug.getMessage());
+
+        // The pinned parser's empty-format WARN logs the whole streamingData JSON
+        // through this same actual post-Shadow static logger.
+        Field field=parser.getDeclaredField("log");field.setAccessible(true);
+        Object logger=field.get(null);
+        loggerType.getMethod("warn",String.class,Object.class).invoke(logger,"Formats rejected, json: {}",json);
+        require(EVENTS.size()==1&&EVENTS.get(0).getLevel().equals(Level.WARNING),"Parser warning boundary lost its level");
+        noEncodedCredentials(EVENTS.remove(0).getMessage());
+        require(json.contains("query-secret")&&cipher.contains("separate-signature-secret"),"Original format input was modified");
+    }
+
+    private static void noEncodedCredentials(String message) {
+        for(String secret:new String[]{"password-secret","path-secret","query-secret","separate-signature-secret"})
+            require(!message.contains(secret),"Encoded media credential leaked: "+secret);
     }
 
     private static void realHttpRequest(ClassLoader loader, String httpPrefix, Handler capture) throws Exception {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -205,9 +205,13 @@ async function getPlasmoVoice(target) {
     assert.ok(response.ok, `Plasmo Voice download HTTP ${response.status}`);
     const bytes = Buffer.from(await response.arrayBuffer());
     assert.equal(createHash('sha512').update(bytes).digest('hex'), pv.sha512, 'PV checksum mismatch');
-    const temporary = destination + '.download';
-    writeFileSync(temporary, bytes);
-    renameSync(temporary, destination);
+    const temporary = destination + '.' + process.pid + '.' + randomUUID() + '.download';
+    try {
+      writeFileSync(temporary, bytes, { flag: 'wx' });
+      renameSync(temporary, destination);
+    } finally {
+      if (existsSync(temporary)) unlinkSync(temporary);
+    }
   }
   assert.equal(createHash('sha512').update(readFileSync(destination)).digest('hex'), pv.sha512,
     'Cached PV checksum mismatch');

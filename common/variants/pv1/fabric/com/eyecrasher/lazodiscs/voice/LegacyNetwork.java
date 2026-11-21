@@ -25,11 +25,20 @@ public final class LegacyNetwork {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> CLIENTS.remove(handler.player.getUUID()));
     }
     public static void reset() { CLIENTS.clear(); }
-    public static void broadcast(ServerLevel level, Vec3 center, int range, byte[] bytes) {
-        for (var player : level.players()) if (CLIENTS.contains(player.getUUID()) && player.position().distanceToSqr(center) <= (double) range * range)
-            {
+    public static void broadcast(ServerLevel level, Vec3 center, int range, LegacyAudioPacket packet, LegacyAudience audience) {
+        var audible = new java.util.ArrayList<UUID>();
+        if (packet.kind == LegacyAudioPacket.FRAME) {
+            for (var player : level.players()) {
+                if (CLIENTS.contains(player.getUUID()) && player.position().distanceToSqr(center) <= (double) range * range)
+                    audible.add(player.getUUID());
+            }
+        }
+        audience.deliver(packet, audible, (id, bytes) -> {
+            var player = level.getServer().getPlayerList().getPlayer(id);
+            if (player != null && CLIENTS.contains(id)) {
                 var payload = PacketByteBufs.create(); payload.writeBytes(bytes);
                 ServerPlayNetworking.send(player, CHANNEL, payload);
             }
+        });
     }
 }

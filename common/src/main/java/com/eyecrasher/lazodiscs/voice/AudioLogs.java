@@ -17,6 +17,9 @@ import org.slf4j.helpers.MessageFormatter;
 
 public final class AudioLogs {
     private static final Pattern URL = Pattern.compile("(?i)(?:\\b[a-z][a-z0-9+.-]*:|(?<![\\w./:]))//[^\\s<>\"]+");
+    private static final Pattern MEDIA_FIELD = Pattern.compile(
+            "(?i)(\"(?:signatureCipher|cipher|url|signature|sig|lsig|token|authorization|cookie)\"\\s*:\\s*\")(?:\\\\.|[^\"\\\\])*(\")");
+    private static final Pattern ENCODED_URL = Pattern.compile("(?i)https?%3a%2f%2f[^\\s<>\"]+");
 
     private AudioLogs() {}
 
@@ -150,6 +153,10 @@ public final class AudioLogs {
 
     private static String redact(String text, Throwable error) {
         if (text == null) return null;
+        // YouTube format diagnostics include JSON strings with encoded signed URLs
+        // and separate cipher signatures. They need redaction before literal URLs.
+        text = MEDIA_FIELD.matcher(text).replaceAll("$1[media credentials omitted]$2");
+        text = ENCODED_URL.matcher(text).replaceAll("[media URL omitted]");
         // URI syntax errors echo their complete input, including malformed relative
         // redirects with spaces. Scrub that exact input without mutating the cause.
         java.util.Set<Throwable> seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
