@@ -51,11 +51,12 @@ public final class JukeboxPlaybackManager implements Listener {
     private final Map<Key, Entry> active = new HashMap<>();
     private final Map<Key, Entry> completed = new HashMap<>();
     private final Map<UUID, Key> insertedThisTick = new HashMap<>();
-    private final LegacyJukeboxSounds sounds = new LegacyJukeboxSounds();
+    private final LegacyJukeboxSounds sounds;
 
     public JukeboxPlaybackManager(LazoDiscs plugin, LazoDiscsVoiceAddon voice) {
         this.plugin = plugin;
         this.voice = voice;
+        sounds = new LegacyJukeboxSounds(plugin, this, this::recordChanged);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -144,7 +145,6 @@ public final class JukeboxPlaybackManager implements Listener {
                 && event.getClickedBlock().getType() == Material.JUKEBOX
                 && event.useInteractedBlock() != Event.Result.DENY) {
             Block block = event.getClickedBlock();
-            sounds.forget(block);
             scheduleSync(block);
         }
     }
@@ -158,13 +158,19 @@ public final class JukeboxPlaybackManager implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void hopper(InventoryMoveItemEvent event) {
         scheduleInventory(event.getSource());
-        if (!(event.getDestination().getHolder() instanceof Jukebox jukebox)) return;
-        Block block = jukebox.getBlock();
-        var marker = jukebox.getRecord().getType().isAir() && DiscDataUtil.read(event.getItem()).isPresent()
-                ? sounds.expect(block, event) : null;
-        // A refused move must not suppress a later ordinary start at the same jukebox.
-        if (marker == null) sounds.forget(block);
-        scheduleSync(block, marker);
+        scheduleInventory(event.getDestination());
+    }
+
+    private void recordChanged(Block block) {
+        if (block.getType() != Material.JUKEBOX) return;
+        Jukebox jukebox = (Jukebox) block.getState();
+        if (DiscDataUtil.read(jukebox.getRecord()).isPresent()) {
+            scheduleSync(block, sounds.expect(block));
+        } else {
+            sounds.forget(block);
+            Key key = Key.of(block);
+            if (active.containsKey(key) || completed.containsKey(key)) scheduleSync(block);
+        }
     }
 
     private void scheduleInventory(Inventory inventory) {
@@ -247,8 +253,11 @@ public final class JukeboxPlaybackManager implements Listener {
         plugin.onMain(
                 () -> {
                     Block loaded = key.loadedBlock();
-                    if (marker != null) sounds.clear(marker);
-                    if (loaded != null) sync(loaded, false);
+                    try {
+                        if (loaded != null) sync(loaded, false);
+                    } finally {
+                        if (marker != null) sounds.clear(marker);
+                    }
                 });
     }
 
