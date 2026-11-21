@@ -293,7 +293,7 @@ public final class PaperIntegration extends JavaPlugin {
         plugin.markAudioUsed();
         new Thread(
                         () -> {
-                            try (var stream = LavaPcmFeeder.openStream(audio, "Fixture", 1)) {
+                            try (var stream = LavaPcmFeeder.openStream(audio, 1)) {
                                 int frames = 0;
                                 long deadline = System.nanoTime() + 15_000_000_000L;
                                 while (System.nanoTime() < deadline) {

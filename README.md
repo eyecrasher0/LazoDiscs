@@ -34,7 +34,7 @@ Use `search` for a song name and `burn` for a link. Spotify support is for indiv
 - **Paper:** prefer the native Paper file for your exact version. Keep that distribution when upgrading an existing native Paper installation.
 - **Spigot / Purpur / Folia and additional Paper versions:** install `lazodiscs-bukkit-1.0.8.jar` in `plugins`. Install only one LazoDiscs plugin. Configuration is in `plugins/LazoDiscs/config.yml`; access uses Bukkit permissions.
 - **Voice 2:** listeners need Plasmo Voice. LazoDiscs is optional on clients and improves recorded-disc tooltips.
-- **Voice 1:** listeners need the matching client LazoDiscs mod or the Voice 1 client helper described in the compatibility guide. Use Voice 1 only where the guide selects it.
+- **Voice 1:** listeners need the matching client LazoDiscs mod or the Voice 1 client helper described in the compatibility guide. Use Voice 1 only where the guide selects it. Music starts after the official Voice session connects.
 - **Singleplayer:** install LazoDiscs and its matching dependencies in the Minecraft instance.
 
 [The full compatibility and installation guide](docs/compatibility-1.0.8.md) links the exact official Voice dependency for each platform/version. It covers **35 Fabric, 16 Forge, 17 NeoForge, 32 Paper, 35 Spigot, 30 Purpur and 13 Folia targets**. Voice 2 is preferred; Voice 1 supplies older targets and stock Bukkit 1.16.5, whose JVM limit prevents the official Voice 2 plugin from starting.
@@ -89,7 +89,7 @@ LazoDiscs позволяет записать свою музыку на обы�
 - **Paper:** используй нативную Paper-сборку для своей версии, если она есть. При обновлении существующей нативной установки сохрани этот вариант.
 - **Spigot / Purpur / Folia и дополнительные версии Paper:** установи `lazodiscs-bukkit-1.0.8.jar` в `plugins`. Одновременно должен быть установлен только один плагин LazoDiscs. Конфиг — `plugins/LazoDiscs/config.yml`, доступ — через Bukkit-права.
 - **Voice 2:** игрокам нужен Plasmo Voice. Клиентский LazoDiscs необязателен и улучшает подсказки записанных пластинок.
-- **Voice 1:** игрокам нужен соответствующий клиентский LazoDiscs или отдельный модуль Voice 1 из инструкции. Выбирай поколение Voice по таблице.
+- **Voice 1:** игрокам нужен соответствующий клиентский LazoDiscs или отдельный модуль Voice 1 из инструкции. Выбирай поколение Voice по таблице. Музыка передаётся после подключения официальной голосовой сессии.
 - **Одиночная игра:** установи LazoDiscs и соответствующие зависимости в экземпляр Minecraft.
 
 [Полная таблица и инструкция](docs/compatibility-1.0.8.md) содержит ссылки на точные версии Voice для каждой платформы: **35 Fabric, 16 Forge, 17 NeoForge, 32 Paper, 35 Spigot, 30 Purpur и 13 Folia**. Приоритет у Voice 2. Voice 1 используется на старых версиях и Bukkit 1.16.5, где ограничение Java не позволяет запустить официальный плагин Voice 2.

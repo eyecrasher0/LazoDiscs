@@ -123,7 +123,7 @@ public final class LazoDiscsCommands {
                 () -> {
                     try {
                         LavaPcmFeeder.ResolvedTrack resolved =
-                                LavaPcmFeeder.resolveTrack(url, titleHint);
+                                LavaPcmFeeder.resolveTrack(url);
                         String title = chooseBurnTitle(url, titleHint, resolved);
                         server.execute(
                                 () ->

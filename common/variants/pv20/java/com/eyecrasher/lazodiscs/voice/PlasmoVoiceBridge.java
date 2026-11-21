@@ -29,6 +29,7 @@ public final class PlasmoVoiceBridge {
         Pv2Transport current = transport;
         if (current == null) throw new IllegalStateException("Plasmo Voice is not ready");
         var sink = entity == null ? current.source(level, position.x, position.y, position.z, disc.title(), disc.range()) : current.entitySource(entity, disc.title(), disc.range());
+        PlaybackProbe.sourceRegistered(disc.id());
         var stream = new StreamingSession(sink, failure -> level.getServer().execute(() -> {
             if (failure != null) {
                 LazoDiscs.LOGGER.warn("Could not play '{}': {}", disc.title(), failure);

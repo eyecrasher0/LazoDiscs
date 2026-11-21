@@ -38,6 +38,7 @@ public final class PlasmoVoiceBridge {
             }
             if (finished != null) finished.run();
         }));
+        PlaybackProbe.sourceRegistered(disc.id());
         stream.start(disc);
         return new PlayingVoiceSource() {
             @Override public void stop() { stream.close(); }

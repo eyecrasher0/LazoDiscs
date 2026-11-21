@@ -65,6 +65,11 @@ public final class BukkitIntegration extends JavaPlugin {
     private ItemStack held;
     private Player player;
     private Object completedStream;
+    private final java.util.List<com.eyecrasher.lazodiscs.voice.LegacyAudioPacket> legacyReceived = new java.util.ArrayList<>();
+    private final java.util.List<LazoDiscsVoiceAddon.Session> disableSessions = new java.util.ArrayList<>();
+    private Map<Object,Object> officialLegacyClients;
+    private Player legacyListener;
+    private final java.util.concurrent.atomic.AtomicReference<Location> legacyPosition = new java.util.concurrent.atomic.AtomicReference<>();
 
     @Override public void onEnable() {
         scheduler = new Scheduling(this);
@@ -133,6 +138,7 @@ public final class BukkitIntegration extends JavaPlugin {
         block.setType(Material.JUKEBOX);
         block.getChunk().addPluginChunkTicket(this);
         setupPlayer();
+        legacySessionChecks();
         held = new ItemStack(Material.MUSIC_DISC_CAT);
         DiscDataUtil.write(held, disc(audio));
         var event = interaction();
@@ -188,6 +194,70 @@ public final class BukkitIntegration extends JavaPlugin {
             default -> defaultValue(method.getReturnType());
         });
     }
+    @SuppressWarnings("unchecked")
+    private void legacySessionChecks() throws Exception {
+        if (!(Boolean) field(voice, "legacy")) return;
+        var official = Bukkit.getPluginManager().getPlugin("PlasmoVoice").getClass().getClassLoader();
+        var socket = Class.forName("su.plo.voice.socket.SocketServerUDP", true, official);
+        officialLegacyClients = (Map<Object,Object>) socket.getField("clients").get(null);
+        UUID id=UUID.randomUUID();legacyPosition.set(location.clone());
+        legacyListener=(Player)Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{Player.class},(proxy,method,args)-> switch(method.getName()) {
+            case "getUniqueId" -> id;
+            case "isOnline" -> true;
+            case "getWorld" -> world;
+            case "getLocation" -> legacyPosition.get();
+            case "getName" -> "LazoDiscsVoiceBoundaryFixture";
+            case "hashCode" -> id.hashCode();
+            case "equals" -> proxy==args[0];
+            case "sendPluginMessage" -> {
+                legacyReceived.add(com.eyecrasher.lazodiscs.voice.LegacyAudioPacket.decode((byte[])args[2]));yield null;
+            }
+            default -> defaultValue(method.getReturnType());
+        });
+        voice.onPluginMessageReceived(com.eyecrasher.lazodiscs.voice.LegacyAudioPacket.CHANNEL,legacyListener,
+                com.eyecrasher.lazodiscs.voice.LegacyAudioPacket.hello().encode());
+        var session=voice.create(location,disc(audio),failure->{});
+        var sink=(StreamingSession.Sink)field(field(session,"stream"),"sink");
+        try {
+            sink.frame(new byte[]{1},0);
+            check(legacyReceived.isEmpty(),"Voice1 HELLO without official session receives no audio");
+            addOfficialLegacySession(official);
+            sink.frame(new byte[]{2},1);
+            check(legacyReceived.size()==1&&legacyReceived.get(0).kind==2,"Voice1 becomes eligible after its later official connection");
+            officialLegacyClients.remove(legacyListener);sink.frame(new byte[]{3},2);
+            check(legacyReceived.size()==1,"Voice1 session loss blocks new audio frames");
+            addOfficialLegacySession(official);
+            legacyPosition.set(location.clone().add(1000,0,0));sink.frame(new byte[]{4},3);
+            sink.finish();session.stop();
+            check(legacyReceived.stream().map(packet->packet.kind).toList().equals(List.of(2,4,3)),
+                    "Voice1 terminal packets reach a connected listener beyond frame range: " + legacyReceived.stream().map(packet->packet.kind).toList());
+        } finally {session.stop();officialLegacyClients.remove(legacyListener);legacyPosition.set(location.clone());legacyReceived.clear();}
+    }
+    private void addOfficialLegacySession(ClassLoader official) throws Exception {
+        // Controlled state in the real official session registry. No UDP/hearing claim.
+        Object client=Class.forName("su.plo.voice.socket.SocketClientUDP",true,official)
+                .getConstructor(Player.class,String.class,java.net.InetAddress.class,int.class)
+                .newInstance(legacyListener,"fabric",java.net.InetAddress.getByName("127.0.0.1"),9);
+        officialLegacyClients.put(legacyListener,client);
+    }
+    private void prepareDisableListeners() throws Exception {
+        if (officialLegacyClients==null) return;
+        addOfficialLegacySession(Bukkit.getPluginManager().getPlugin("PlasmoVoice").getClass().getClassLoader());
+        legacyReceived.clear();legacyPosition.set(location.clone());
+        for(boolean ended:List.of(false,true)) {
+            var session=voice.create(location,disc(audio),failure->{});disableSessions.add(session);
+            var sink=(StreamingSession.Sink)field(field(session,"stream"),"sink");
+            sink.frame(new byte[]{1},0);if(ended)sink.finish();
+        }
+        check(legacyReceived.stream().filter(packet->packet.kind==2).count()==2,"Voice1 disable observer received both source frames");
+    }
+    private void verifyDisableListeners() {
+        if (officialLegacyClients==null) return;
+        check(legacyReceived.stream().filter(packet->packet.kind==3).count()==2,
+                "Voice1 plugin disable delivers STOP for active and END-tail sources before messaging is revoked");
+        disableSessions.forEach(LazoDiscsVoiceAddon.Session::stop);disableSessions.clear();
+        officialLegacyClients.remove(legacyListener);
+    }
     private PlayerInteractEvent interaction() { return new PlayerInteractEvent(player, Action.RIGHT_CLICK_BLOCK, held, location.getBlock(), BlockFace.UP, EquipmentSlot.HAND); }
     private void insert(String url) {
         Jukebox jukebox = (Jukebox) location.getBlock().getState();
@@ -239,7 +309,9 @@ public final class BukkitIntegration extends JavaPlugin {
             Object stream = pendingStream();
             var load = (com.eyecrasher.lazodiscs.voice.AudioLoadTask) field(stream, "load");
             scheduler.global(() -> guarded(() -> {
+                prepareDisableListeners();
                 Bukkit.getPluginManager().disablePlugin(plugin);
+                verifyDisableListeners();
                 waitGlobal("disable retires source and loader while HTTP remains held", () -> activeCount() == 0 && streamCount() == 0 && load.hasExited(), 100, () -> {
                     check(!control("shutdown-release") && !control("shutdown-returned"), "disable precedes HTTP response");
                     check(((Map<?,?>) field(field(plugin, "commands"), "pending")).isEmpty(), "disable clears pending commands");

@@ -37,7 +37,6 @@ import dev.lavalink.youtube.clients.WebWithThumbnail;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -100,22 +99,36 @@ public final class LavaPcmFeeder {
         return manager;
     }
 
-    public static StreamingPlayback openStream(String rawUrl, String title, float volume)
-            throws InterruptedException {
-        return openStream(rawUrl, title, volume, null);
+    /** Kept for integrations; the display hint never substitutes for source metadata. */
+    public static StreamingPlayback openStream(String rawUrl, String displayHint, float volume) throws InterruptedException {
+        return openStream(rawUrl, volume);
     }
 
-    public static StreamingPlayback openStream(String rawUrl, String title, float volume,
+    public static StreamingPlayback openStream(String rawUrl, String displayHint, float volume,
             java.util.function.Consumer<FriendlyException> playbackFailure) throws InterruptedException {
-        return openStream(rawUrl, title, volume, playbackFailure, () -> false);
+        return openStream(rawUrl, volume, playbackFailure, () -> false);
     }
 
-    public static StreamingPlayback openStream(String rawUrl, String title, float volume,
+    public static StreamingPlayback openStream(String rawUrl, String displayHint, float volume,
+            java.util.function.Consumer<FriendlyException> playbackFailure,
+            java.util.function.BooleanSupplier cancelled) throws InterruptedException {
+        return openStream(rawUrl, volume, playbackFailure, cancelled);
+    }
+
+    public static ResolvedTrack resolveTrack(String rawUrl, String displayHint) throws InterruptedException {
+        return resolveTrack(rawUrl);
+    }
+
+    public static StreamingPlayback openStream(String rawUrl, float volume) throws InterruptedException {
+        return openStream(rawUrl, volume, null, () -> false);
+    }
+
+    public static StreamingPlayback openStream(String rawUrl, float volume,
             java.util.function.Consumer<FriendlyException> playbackFailure,
             java.util.function.BooleanSupplier cancelled) throws InterruptedException {
         if (cancelled.getAsBoolean()) throw new java.util.concurrent.CancellationException();
         // Stored or externally supplied disc data must obey current URL restrictions too.
-        ResolveRequest request = resolveIdentifier(DiscDataUtil.validateUrl(rawUrl), title);
+        ResolveRequest request = resolveIdentifier(DiscDataUtil.validateUrl(rawUrl));
         LazoDiscs.LOGGER.info(
                 "LazoDiscs resolving streaming audio with LavaPlayer: '{}' -> '{}'",
                 rawUrl,
@@ -129,9 +142,9 @@ public final class LavaPcmFeeder {
         return new StreamingPlayback(player, track);
     }
 
-    public static ResolvedTrack resolveTrack(String rawUrl, String fallbackTitle)
+    public static ResolvedTrack resolveTrack(String rawUrl)
             throws InterruptedException {
-        ResolveRequest request = resolveIdentifier(DiscDataUtil.validateUrl(rawUrl), fallbackTitle);
+        ResolveRequest request = resolveIdentifier(DiscDataUtil.validateUrl(rawUrl));
         AudioTrack track = loadTrack(PLAYER_MANAGER, request.identifier(), request.metadata());
         validateStreamingTrackLength(track);
 
@@ -376,7 +389,7 @@ public final class LavaPcmFeeder {
         return message == null || message.isBlank() ? t.getClass().getSimpleName() : message;
     }
 
-    private static ResolveRequest resolveIdentifier(String raw, String fallbackTitle) {
+    private static ResolveRequest resolveIdentifier(String raw) {
         if (SpotifyTitleResolver.looksLikeSpotify(raw)) {
             if (!LazoDiscsConfig.SPOTIFY_SEARCH_VIA_YOUTUBE.get()) {
                 throw new IllegalArgumentException(LazoDiscsText.spotifyDisabled());
@@ -384,10 +397,7 @@ public final class LavaPcmFeeder {
             TrackMetadata metadata = SpotifyTitleResolver.resolveMetadata(raw)
                     .map(spotify -> new TrackMetadata(spotify.title(), spotify.artists(), spotify.durationMs()))
                     .filter(track -> !track.title().isBlank())
-                    .orElseGet(() -> Optional.ofNullable(fallbackTitle)
-                            .filter(title -> !title.isBlank() && !title.equals(raw))
-                            .map(title -> new TrackMetadata(title, List.of(), null))
-                            .orElseThrow(() -> new IllegalArgumentException(LazoDiscsText.spotifyMetadataFailed())));
+                    .orElseThrow(() -> new IllegalArgumentException(LazoDiscsText.spotifyMetadataFailed()));
             return new ResolveRequest("ytmsearch:" + metadata.searchQuery(), metadata);
         }
 

@@ -121,7 +121,7 @@ public final class LazoDiscsCommands implements Listener {
                 AudioLoadExecutor.submit(
                         () -> {
                             try {
-                                var resolved = LavaPcmFeeder.resolveTrack(url, hint);
+                                var resolved = LavaPcmFeeder.resolveTrack(url);
                                 String playback =
                                         SpotifyTitleResolver.looksLikeSpotify(url)
                                                 ? resolved.url()

@@ -29,6 +29,7 @@ import su.plo.voice.api.server.audio.source.ServerStaticSource;
 
 import java.io.InputStream;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.Optional;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -234,7 +235,7 @@ public final class PlasmoVoiceBridge {
 
                                 LavaPcmFeeder.StreamingPlayback playback =
                                         LavaPcmFeeder.openStream(
-                                                disc.url(), disc.title(), disc.volume(),
+                                                disc.url(), disc.volume(),
                                                 error -> {
                                                     if (!stopped.get()) notifyLoadFailure(
                                                             level, BlockPos.containing(initialPos), disc, messageOf(error));
@@ -251,11 +252,12 @@ public final class PlasmoVoiceBridge {
                                     ServerEntitySource source =
                                             line.createEntitySource(finalMcEntity, false);
                                     sourceRef.set(source);
+                                    PlaybackProbe.sourceRegistered(disc.id());
                                     source.setName(disc.title());
 
                                     AudioFrameProvider provider =
                                             new StreamingAudioFrameProvider(
-                                                    server, playback, stopped);
+                                                    server, playback, stopped, disc.id());
 
                                     AudioSender sender =
                                             source.createAudioSender(
@@ -421,7 +423,7 @@ public final class PlasmoVoiceBridge {
                                 if (stopped.get()) return;
                                 LavaPcmFeeder.StreamingPlayback playback =
                                         LavaPcmFeeder.openStream(
-                                                disc.url(), disc.title(), disc.volume(),
+                                                disc.url(), disc.volume(),
                                                 error -> {
                                                     if (!stopped.get()) notifyLoadFailure(
                                                             level, BlockPos.containing(pos), disc, messageOf(error));
@@ -436,11 +438,12 @@ public final class PlasmoVoiceBridge {
                                     ServerStaticSource source =
                                             line.createStaticSource(pvPos, false);
                                     sourceRef.set(source);
+                                    PlaybackProbe.sourceRegistered(disc.id());
                                     source.setName(disc.title());
 
                                     AudioFrameProvider provider =
                                             new StreamingAudioFrameProvider(
-                                                    server, playback, stopped);
+                                                    server, playback, stopped, disc.id());
 
                                     AudioSender sender =
                                             source.createAudioSender(
@@ -640,7 +643,7 @@ public final class PlasmoVoiceBridge {
                             try {
                                 LavaPcmFeeder.StreamingPlayback playback =
                                         LavaPcmFeeder.openStream(
-                                                disc.url(), disc.title(), disc.volume(),
+                                                disc.url(), disc.volume(),
                                                 error -> {
                                                     if (!stopped.get()) notifyLoadFailure(
                                                             level, pos, disc, messageOf(error));
@@ -658,12 +661,13 @@ public final class PlasmoVoiceBridge {
                                             line.createStaticSource(pvPos, false);
 
                                     sourceRef.set(source);
+                                    PlaybackProbe.sourceRegistered(disc.id());
 
                                     source.setName(disc.title());
 
                                     AudioFrameProvider provider =
                                             new StreamingAudioFrameProvider(
-                                                    server, playback, stopped);
+                                                    server, playback, stopped, disc.id());
 
                                     AudioSender sender =
                                             source.createAudioSender(
@@ -961,14 +965,16 @@ public final class PlasmoVoiceBridge {
         private final PlasmoVoiceServer server;
         private final LavaPcmFeeder.StreamingPlayback playback;
         private final AtomicBoolean stopped;
+        private final UUID disc;
 
         private StreamingAudioFrameProvider(
                 PlasmoVoiceServer server,
                 LavaPcmFeeder.StreamingPlayback playback,
-                AtomicBoolean stopped) {
+                AtomicBoolean stopped, UUID disc) {
             this.server = server;
             this.playback = playback;
             this.stopped = stopped;
+            this.disc = disc;
         }
 
         @Override
@@ -982,6 +988,7 @@ public final class PlasmoVoiceBridge {
                 AudioFrame frame = playback.player().provide();
                 if (frame != null) {
                     byte[] encrypted = server.getDefaultEncryption().encrypt(frame.getData());
+                    PlaybackProbe.frameProvided(disc);
                     return new AudioFrameResult.Provided(encrypted);
                 }
 

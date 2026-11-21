@@ -47,13 +47,3 @@ jobs:
           runtime='${{ matrix.runtime }}'
           if [ "$runtime" = 8 ]; then runtime=1.8; fi
           python3 tools/verify-packaged-audio.py --jar 'build-matrix/${{ matrix.platform }}/${{ matrix.minecraft }}/libs/lazodiscs-${{ matrix.platform }}-1.0.8+${{ matrix.minecraft }}.jar' --java "$JAVA_HOME/bin/java" --javac "$JAVA_HOME_25_X64/bin/javac" --version "$runtime" --report 'build-matrix/verification/native-audio.json'
-      - name: Upload release archive and verification
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: lazodiscs-${{ matrix.platform }}-${{ matrix.minecraft }}
-          path: |
-            build-matrix/release/*.jar
-            build-matrix/results/**
-            build-matrix/logs/**
-            build-matrix/verification/**

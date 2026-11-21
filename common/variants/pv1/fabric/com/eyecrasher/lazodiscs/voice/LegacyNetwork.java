@@ -29,16 +29,17 @@ public final class LegacyNetwork {
         var audible = new java.util.ArrayList<UUID>();
         if (packet.kind == LegacyAudioPacket.FRAME) {
             for (var player : level.players()) {
-                if (CLIENTS.contains(player.getUUID()) && player.position().distanceToSqr(center) <= (double) range * range)
+                if (CLIENTS.contains(player.getUUID()) && LegacyVoiceSessions.hasSession(player.getUUID())
+                        && player.position().distanceToSqr(center) <= (double) range * range)
                     audible.add(player.getUUID());
             }
         }
-        audience.deliver(packet, audible, (id, bytes) -> {
-            var player = level.getServer().getPlayerList().getPlayer(id);
-            if (player != null && CLIENTS.contains(id)) {
-                var payload = PacketByteBufs.create(); payload.writeBytes(bytes);
-                ServerPlayNetworking.send(player, CHANNEL, payload);
-            }
+        audience.deliver(packet, audible, id ->
+                CLIENTS.contains(id)
+                        ? level.getServer().getPlayerList().getPlayer(id) : null,
+                (player, bytes) -> {
+            var payload = PacketByteBufs.create(); payload.writeBytes(bytes);
+            ServerPlayNetworking.send(player, CHANNEL, payload);
         });
     }
 }

@@ -6,17 +6,22 @@ import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -34,11 +39,17 @@ class DirectMediaSourceTest {
         volatile String playlistQuery,segmentQuery;
 
         Fixture() throws Exception {
+            this(uri -> {});
+        }
+
+        Fixture(Consumer<URI> policy) throws Exception {
             manager.getConfiguration().setOutputFormat(StandardAudioDataFormats.DISCORD_PCM_S16_LE);
             manager.registerSourceManager(new DirectMediaSource(url -> {
-                if (!"127.0.0.1".equals(URI.create(url).getHost())) {
-                    throw new IllegalArgumentException("Host blocked by test policy: " + URI.create(url).getHost());
+                URI uri = URI.create(url);
+                if (!"127.0.0.1".equals(uri.getHost())) {
+                    throw new IllegalArgumentException("Host blocked by test policy: " + uri.getHost());
                 }
+                policy.accept(uri);
             }));
             http.createContext("/", exchange -> {
                 String path = exchange.getRequestURI().getPath();
@@ -335,5 +346,168 @@ class DirectMediaSourceTest {
                 assertTrue(hits.get() >= 3);
             } finally { player.destroy(); }
         }
+    }
+
+    @Test void basicAuthStaysWithTheRecordingAcrossRedirectsAndPlayback() throws Exception {
+        for (boolean hls : List.of(false, true)) {
+            try (var fixture = new Fixture()) {
+                String suffix = hls ? ".m3u8" : ".wav";
+                String resource = "/private/recording" + suffix;
+                byte[] audio = hls ? segment() : wav();
+                fixture.http.createContext("/private/", exchange -> {
+                    try (exchange) {
+                        if (!"Basic Zml4dHVyZTpwYXNz".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
+                            exchange.getResponseHeaders().set("WWW-Authenticate", "Basic realm=\"recordings\"");
+                            exchange.sendResponseHeaders(401, -1);
+                        } else if (exchange.getRequestURI().getPath().equals("/private/start" + suffix)) {
+                            redirect(exchange, fixture.allowed(resource));
+                        } else if (exchange.getRequestURI().getPath().endsWith(".m3u8")) {
+                            respond(exchange, "application/vnd.apple.mpegurl", playlist("tone.ts"));
+                        } else {
+                            respond(exchange, hls ? "video/mp2t" : "audio/wav", audio);
+                        }
+                    }
+                });
+                String entry = fixture.allowed("/private/start" + suffix).replace("://", "://fixture:pass@");
+                var recording = fixture.load(entry);
+                assertEquals(fixture.allowed(resource), recording.getIdentifier());
+                var refusal = assertThrows(ExecutionException.class, () -> fixture.load(fixture.allowed(resource)));
+                assertTrue(refusal.getCause().getCause().getMessage().contains("401"));
+                assertPlays(fixture, recording);
+            }
+        }
+    }
+
+    @Test void hlsChecksTheOriginalUriOfBothKindsOfChildRequest() throws Exception {
+        try (var fixture = new Fixture(uri -> {
+            if (uri.getRawUserInfo() != null) throw new IllegalArgumentException("User info blocked by test policy");
+        })) {
+            String child = fixture.allowed("/forbidden-child").replace("://", "://fixture:pass@");
+            fixture.http.createContext("/variants.m3u8", exchange -> {
+                try (exchange) {
+                    respond(exchange, "application/vnd.apple.mpegurl",
+                            ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n" + child + "\n").getBytes(StandardCharsets.UTF_8));
+                }
+            });
+            fixture.http.createContext("/media.m3u8", exchange -> {
+                try (exchange) {
+                    respond(exchange, "application/vnd.apple.mpegurl", playlist(child));
+                }
+            });
+            for (String path : List.of("/variants.m3u8", "/media.m3u8")) {
+                Throwable failure = fixture.playbackFailure(fixture.load(fixture.allowed(path)));
+                while (failure.getCause() != null) failure = failure.getCause();
+                assertEquals("User info blocked by test policy", failure.getMessage());
+            }
+            assertEquals(0, fixture.forbiddenRequests.get());
+        }
+    }
+
+    @Test void queryOnlyRedirectsAndHlsChildrenKeepTheirPathAndRawQuery() throws Exception {
+        try (var fixture = new Fixture()) {
+            String direct = "/live/song.wav";
+            String hls = "/live/index.m3u8";
+            var received = new ConcurrentLinkedQueue<String>();
+            byte[] tone = segment();
+            fixture.http.createContext("/live/", exchange -> {
+                try (exchange) {
+                    var target = exchange.getRequestURI();
+                    received.add(target.toString());
+                    String query = target.getRawQuery();
+                    if (target.getPath().equals(direct)) {
+                        if ("start".equals(query)) redirect(exchange, "?signature=wave%2B");
+                        else if ("signature=wave%2B".equals(query)) respond(exchange, "audio/wav", wav());
+                        else exchange.sendResponseHeaders(404, -1);
+                    } else if (target.getPath().equals(hls) && query != null) {
+                        switch (query) {
+                            case "start" -> redirect(exchange, "?master=on%2F");
+                            case "master=on%2F" -> respond(exchange, "application/vnd.apple.mpegurl",
+                                    "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n?variant=low%2B\n".getBytes(StandardCharsets.UTF_8));
+                            case "variant=low%2B" -> redirect(exchange, "?playlist=audio%2f");
+                            case "playlist=audio%2f" -> respond(exchange, "application/vnd.apple.mpegurl", playlist("?part=1%2B"));
+                            case "part=1%2B" -> redirect(exchange, "?signature=exact%2B%2F");
+                            case "signature=exact%2B%2F" -> respond(exchange, "video/mp2t", tone);
+                            default -> exchange.sendResponseHeaders(404, -1);
+                        }
+                    } else exchange.sendResponseHeaders(404, -1);
+                }
+            });
+            assertPlays(fixture, fixture.load(fixture.allowed(direct + "?start")));
+            assertPlays(fixture, fixture.load(fixture.allowed(hls + "?start")));
+            assertTrue(received.containsAll(List.of(direct + "?signature=wave%2B", hls + "?master=on%2F",
+                    hls + "?variant=low%2B", hls + "?playlist=audio%2f", hls + "?part=1%2B", hls + "?signature=exact%2B%2F")),
+                    received.toString());
+            assertTrue(received.stream().noneMatch(uri -> uri.startsWith("/live/?")), received.toString());
+        }
+    }
+
+    private static void assertPlays(Fixture fixture, AudioTrack track) throws Exception {
+        var player = fixture.manager.createPlayer();
+        try {
+            AudioPlaybackPreparation.start(player, track, null);
+            assertNotNull(player.provide(), "The decoder must provide audio for the permitted recording");
+        } finally { player.destroy(); }
+    }
+
+    private static byte[] playlist(String child) {
+        return ("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:0.4,\n"
+                + child + "\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] segment() throws IOException {
+        try (var input = DirectMediaSourceTest.class.getResourceAsStream("/audio/hls-control.ts")) {
+            return input.readAllBytes();
+        }
+    }
+
+    private static void redirect(HttpExchange exchange, String location) throws IOException {
+        exchange.getResponseHeaders().set("Location", location);
+        exchange.sendResponseHeaders(302, -1);
+    }
+
+    private static void respond(HttpExchange exchange, String contentType, byte[] body) throws IOException {
+        exchange.getResponseHeaders().set("Content-Type", contentType);
+        exchange.sendResponseHeaders(200, body.length);
+        exchange.getResponseBody().write(body);
+    }
+    @Test void standaloneHlsMediaPlaylistPlaysEveryRelativeSegment() throws Exception { standaloneMedia(false); }
+    @Test void standaloneHlsMediaPlaylistPlaysEveryAbsoluteSegment() throws Exception { standaloneMedia(true); }
+    private static void standaloneMedia(boolean absolute) throws Exception {
+        try (var fixture = new Fixture()) {
+            var children=new java.util.HashSet<String>();
+            fixture.http.createContext("/chunks/", e -> {
+                synchronized(children){children.add(e.getRequestURI().getPath());}
+                byte[] body;
+                try(var in=DirectMediaSourceTest.class.getResourceAsStream("/audio/hls-control.ts")){body=in.readAllBytes();}
+                e.getResponseHeaders().set("Content-Type","video/mp2t");
+                e.sendResponseHeaders(200,body.length);e.getResponseBody().write(body);e.close();
+            });
+            fixture.http.createContext("/standalone.m3u8", e -> {
+                String one=absolute?fixture.allowed("/chunks/one.ts"):"chunks/one.ts";
+                String two=absolute?fixture.allowed("/chunks/two.ts"):"chunks/two.ts";
+                byte[] body=("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:0.4,\n"+one+"\n#EXTINF:0.4,\n"+two+"\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);
+                e.getResponseHeaders().set("Content-Type","application/vnd.apple.mpegurl");
+                e.sendResponseHeaders(200,body.length);e.getResponseBody().write(body);e.close();
+            });
+            int single=countDecodedFrames(fixture,fixture.allowed("/allowed-outer.m3u8"));
+            int multiple=countDecodedFrames(fixture,fixture.allowed("/standalone.m3u8"));
+            System.out.println("standalone="+absolute+" singleFrames="+single+" twoSegmentFrames="+multiple+" children="+children);
+            assertTrue(single>0);assertTrue(multiple>=single*1.8,"Direct media playlist must play beyond its first segment: "+single+" vs "+multiple);
+            synchronized(children){assertEquals(java.util.Set.of("/chunks/one.ts","/chunks/two.ts"),children);}
+        }
+    }
+    private static int countDecodedFrames(Fixture fixture,String url) throws Exception {
+        var player=fixture.manager.createPlayer();
+        try {
+            AudioTrack track=fixture.load(url);AudioPlaybackPreparation.start(player,track,null);
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(8);int count=0;
+            while(System.nanoTime()<deadline){
+                var frame=player.provide();
+                if(frame!=null)count++;
+                else if(player.getPlayingTrack()==null && count>0)return count;
+                else Thread.sleep(1);
+            }
+            fail("Playback did not finish");return 0;
+        } finally {player.destroy();}
     }
 }

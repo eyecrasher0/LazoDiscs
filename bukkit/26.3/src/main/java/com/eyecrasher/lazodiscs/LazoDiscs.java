@@ -8,6 +8,8 @@ import com.eyecrasher.lazodiscs.text.LazoDiscsText;
 import com.eyecrasher.lazodiscs.voice.AudioLoadExecutor;
 import com.eyecrasher.lazodiscs.voice.LavaPcmFeeder;
 import com.eyecrasher.lazodiscs.voice.LazoDiscsVoiceAddon;
+import com.eyecrasher.lazodiscs.voice.StreamingSession;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
@@ -87,6 +89,16 @@ public final class LazoDiscs extends JavaPlugin {
     }
     public void onMain(Runnable action) { if (!stopping && isEnabled()) scheduler.global(() -> { if (!stopping) action.run(); }); }
     public void onRegion(Location location, Runnable action) { if (!stopping && isEnabled()) scheduler.region(location, () -> { if (!stopping) action.run(); }); }
+    public void onLegacyRegion(Location location, Runnable action) {
+        if (isEnabled() && !scheduler.isFolia() && Bukkit.isPrimaryThread()) action.run();
+        else onRegion(location, action);
+    }
+    public void prepareLegacyDisable() {
+        if (scheduler == null || scheduler.isFolia() || !Bukkit.isPrimaryThread()) return;
+        stopping = true;
+        if (playback != null) playback.stopAll();
+        StreamingSession.shutdown();
+    }
     public void onPlayer(Player player, Runnable action, Runnable retired) { if (!stopping && isEnabled()) scheduler.player(player, () -> { if (!stopping) action.run(); }, retired); }
     public void onPlayer(Player player, Runnable action) {
         Runnable retired = commands == null ? () -> {} : commands.retirement(player);

@@ -97,7 +97,7 @@ class StreamingSessionTest {
         var completed = new AtomicBoolean();
         var sender = new LegacyPacketSender(source, Runnable::run,
                 (opus, sequence) -> LegacyAudioPacket.frame(source,"world",0,0,0,64,sequence,opus),
-                packet -> audience.deliver(packet,audible,(id,bytes) -> {
+                packet -> audience.deliver(packet,audible,id -> id.equals(listener) ? id : null,(id,bytes) -> {
                     assertEquals(listener,id);
                     try { received.add(LegacyAudioPacket.decode(bytes).kind); }
                     catch(java.io.IOException error) { throw new AssertionError(error); }
@@ -107,12 +107,12 @@ class StreamingSessionTest {
             AudioPlaybackPreparation.start(player,track,null);
             var playback = StreamingSession.class.getDeclaredField("playback");playback.setAccessible(true);
             playback.set(session,new LavaPcmFeeder.StreamingPlayback(player,track));
-            var tick = StreamingSession.class.getDeclaredMethod("tick");tick.setAccessible(true);
-            tick.invoke(session);
+            var tick = StreamingSession.class.getDeclaredMethod("tick", java.util.UUID.class);tick.setAccessible(true);
+            tick.invoke(session,source);
             assertEquals(java.util.List.of(LegacyAudioPacket.FRAME),received);
             audible.clear(); // A listener moves out of range after hearing the source.
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
-            while(!completed.get()&&System.nanoTime()<deadline){tick.invoke(session);Thread.sleep(1);}
+            while(!completed.get()&&System.nanoTime()<deadline){tick.invoke(session,source);Thread.sleep(1);}
             assertTrue(completed.get());
             assertEquals(java.util.List.of(LegacyAudioPacket.FRAME,LegacyAudioPacket.END),received);
             session.close();session.close();

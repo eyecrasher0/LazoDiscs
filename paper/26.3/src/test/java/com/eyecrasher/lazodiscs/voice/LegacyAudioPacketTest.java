@@ -57,4 +57,19 @@ class LegacyAudioPacketTest {
         ByteBuffer.wrap(badLength).putShort(56,(short)4096);
         assertThrows(IOException.class, () -> LegacyAudioPacket.decode(badLength));
     }
+
+    @Test void independentForgeWirePayloadsKeepTheChannelDiscriminatorAndProtocol() throws Exception {
+        var hex = java.util.HexFormat.of();
+        UUID source = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff");
+        assertArrayEquals(hex.parseHex("000101"), LegacyAudioPacket.hello().encode());
+        assertArrayEquals(hex.parseHex("00010300112233445566778899aabbccddeeff"), LegacyAudioPacket.stop(source).encode());
+        assertArrayEquals(hex.parseHex("00010400112233445566778899aabbccddeeff"), LegacyAudioPacket.end(source).encode());
+        byte[] wire = hex.parseHex("00010200112233445566778899aabbccddeeff0001773ff0000000000000c0000000000000003fe00000000000000040010203040506070800020102");
+        assertArrayEquals(wire, LegacyAudioPacket.frame(source,"w",1,-2,.5,64,0x0102030405060708L,new byte[]{1,2}).encode());
+        var decoded=LegacyAudioPacket.decode(wire);
+        assertEquals(source,decoded.source);assertEquals("w",decoded.world);
+        assertEquals(1,decoded.x);assertEquals(-2,decoded.y);assertEquals(.5,decoded.z);
+        assertEquals(64,decoded.range);assertEquals(0x0102030405060708L,decoded.sequence);
+        assertArrayEquals(new byte[]{1,2},decoded.opus);
+    }
 }

@@ -133,7 +133,7 @@ public final class LazoDiscsVoiceAddon implements AddonInitializer {
                                     if (closed.get()) return;
                                     var opened =
                                             LavaPcmFeeder.openStream(
-                                                    disc.url(), disc.title(), disc.volume(),
+                                                    disc.url(), disc.volume(),
                                                     error -> {
                                                         if (!closed.get()) failure.compareAndSet(null, messageOf(error));
                                                     }, closed::get);

@@ -3,6 +3,7 @@
 import json
 import datetime
 from pathlib import Path
+from urllib.error import HTTPError
 import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 MC = ['1.7.10','1.8.9','1.12.2','1.16.5','1.17','1.17.1','1.18','1.18.1','1.18.2'] + ['1.19'] + [f'1.19.{i}' for i in range(1,5)] + ['1.20'] + [f'1.20.{i}' for i in range(1,7)] + ['1.21'] + [f'1.21.{i}' for i in range(1,12)] + ['26.1','26.1.1','26.1.2','26.2','26.3']
@@ -34,9 +35,14 @@ def resolve():
             if platform in available and mc not in available[platform]:
                 excluded.append({'platform':platform,'minecraft':mc,'reason':'No official server distribution'});continue
             if platform=='spigot':
-                try:read(f'https://hub.spigotmc.org/versions/{mc}.json')
-                except Exception:
+                try:build=read(f'https://hub.spigotmc.org/versions/{mc}.json')
+                except HTTPError as error:
+                    if error.code!=404:raise
                     excluded.append({'platform':platform,'minecraft':mc,'reason':'No official BuildTools version'});continue
+                refs=build.get('refs') if isinstance(build,dict) else None
+                if not isinstance(refs,dict) or not all(isinstance(refs.get(key),str) and refs[key]
+                        for key in ('BuildData','Bukkit','CraftBukkit','Spigot')):
+                    raise ValueError(f'Invalid BuildTools metadata for Spigot {mc}')
             override=overrides.get(platform+'/'+mc)
             row=next(v for v in candidates if v['id']==override['versionId']) if override else max(candidates,key=lambda v:v['date_published'])
             file=next((f for f in row['files'] if f.get('primary')), row['files'][0])

@@ -24,4 +24,12 @@ public final class PlaybackProbe {
     public static void emptySlot(UUID disc) {
         if (ENABLED) LazoDiscs.LOGGER.info("LazoDiscs smoke retired {} from empty jukebox", disc);
     }
+
+    static void sourceRegistered(UUID disc) {
+        if (ENABLED) LazoDiscs.LOGGER.info("LazoDiscs smoke registered source {}", disc);
+    }
+
+    static void frameProvided(UUID disc) {
+        if (ENABLED) LazoDiscs.LOGGER.info("LazoDiscs smoke provided frame {}", disc);
+    }
 }

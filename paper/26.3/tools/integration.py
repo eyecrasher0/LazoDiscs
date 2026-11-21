@@ -137,8 +137,10 @@ def main():
     tested_hash = hashlib.sha256((plugins / "LazoDiscs.jar").read_bytes()).hexdigest()
     fixture_hash = hashlib.sha256((plugins / "LazoDiscsIntegration.jar").read_bytes()).hexdigest()
     voice_hash = hashlib.sha512((plugins / "PlasmoVoice.jar").read_bytes()).hexdigest()
-    server_hash = hashlib.sha256((cache / "paper.jar").read_bytes()).hexdigest()
     shutil.copy2(cache / "paper.jar", run / "paper.jar")
+    server_hash = hashlib.sha256((run / "paper.jar").read_bytes()).hexdigest()
+    if server_hash != target["download"]["checksums"]["sha256"] or voice_hash != digest:
+        raise RuntimeError("Staged runtime JAR failed its pinned checksum")
     # Reuse Paper's downloaded vanilla server and libraries, never its worlds/configuration.
     for name in ("cache", "libraries", "versions"):
         if (cache / name).exists():
@@ -155,7 +157,9 @@ def main():
         "spawn-protection=0\nmax-players=4\npause-when-empty-seconds=-1\n"
     )
     config = (MODULE / "src/main/resources/config.yml").read_text().replace("allowHttp: false", "allowHttp: true")
-    (plugins / "LazoDiscs/config.yml").write_text(config)
+    staged_config = plugins / "LazoDiscs/config.yml"
+    staged_config.write_text(config)
+    config_hash = hashlib.sha256(staged_config.read_bytes()).hexdigest()
     (plugins / "PlasmoVoice/config.toml").write_text('[host]\nip = "127.0.0.1"\nport = 0\n')
     AudioFixture.shutdown_request = run / "shutdown-requested"
     http_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), AudioFixture)
@@ -188,7 +192,7 @@ def main():
             raise RuntimeError("Release JAR changed while its copied test instance was running")
         if hashlib.sha256(fixture.read_bytes()).hexdigest() != fixture_hash or hashlib.sha256(Path(__file__).read_bytes()).hexdigest() != harness_hash:
             raise RuntimeError("Fixture/verifier changed during integration; rerun")
-        report.update(fixture_sha256=fixture_hash, harness_sha256=harness_hash, server_sha256=server_hash,
+        report.update(fixture_sha256=fixture_hash, harness_sha256=harness_hash, server_sha256=server_hash, config_sha256=config_hash,
                       voice_sha512=voice_hash, console_sha256=hashlib.sha256((run / "console.log").read_bytes()).hexdigest(), paper=f"{args.minecraft}-{target['build']}", plasmo=args.plasmo, log=str(run / "console.log"), jar_sha256=tested_hash)
         (cache / f"result-{args.plasmo}.json").write_text(json.dumps(report, indent=2) + "\n")
         print(json.dumps(report, indent=2))

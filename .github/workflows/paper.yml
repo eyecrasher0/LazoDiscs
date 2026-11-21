@@ -91,12 +91,6 @@ jobs:
       - name: Run disposable Paper integration server
         working-directory: paper/26.3
         run: python3 tools/integration.py --minecraft '${{ matrix.target.minecraft }}' --plasmo '${{ matrix.plasmo }}' --java "$JAVA_HOME/bin/java"
-      - name: Upload release JAR
-        if: success() && matrix.plasmo == 'stable'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: lazodiscs-paper-${{ matrix.target.minecraft }}
-          path: paper/26.3/build/${{ matrix.target.minecraft }}/libs/lazodiscs-paper-1.0.8+${{ matrix.target.minecraft }}.jar
       - name: Upload verification logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

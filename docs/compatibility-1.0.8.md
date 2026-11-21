@@ -82,7 +82,10 @@ servers, stopping the vanilla song uses the native record-stop event; hopper and
 redstone behavior follows that server's jukebox API. Newer native Paper builds
 use silent songs. Voice 1 supports positional jukebox playback; its extra client
 transport uses Voice 1's Opus decoder, audio engine and listener volume settings,
-with bounded PCM/OpenAL storage owned and released by LazoDiscs.
+with bounded PCM/OpenAL storage owned and released by LazoDiscs. Listeners must
+have an active official Voice 1 session; the LazoDiscs client greeting alone does
+not authorize audio delivery. A late Voice connection starts delivery without a
+second Minecraft login.
 Optional Sophisticated Backpacks integration requires Voice 2.
 
 Minecraft 1.7.10, 1.8.9 and 1.12.2 are excluded because there is no official Plasmo

@@ -4,6 +4,15 @@ import argparse,concurrent.futures,hashlib,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 
+def current_console(prior):
+    log=prior.get('log')
+    if not isinstance(log,str) or not log:return False
+    try:
+        path=Path(log)
+        return path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest()==prior.get('console_sha256')
+    except OSError:
+        return False
+
 def current_artifacts(prior,server,server_pin,voice,voice_pin):
     if server_pin is None or not server.is_file() or not voice.is_file():return False
     server_bytes=server.read_bytes()
@@ -37,6 +46,7 @@ def main():
             if ('failure' in prior and prior['failure'] is None and prior.get('jar_sha256')==sha
                     and all(prior.get(key)==value for key,value in verifier_inputs.items())
                     and prior.get('fixture_sha256')==fixture_sha and prior.get('voice')==voice['version']
+                    and current_console(prior)
                     and current_artifacts(prior,result.with_name('server.jar'),server_pins.get(f'{platform}/{mc}'),cached_voice,voice)):
                 print(f'SKIP verified {platform}/{mc}',flush=True);return prior
         log=out/'logs/server'/f'{platform}-{mc}.log';log.parent.mkdir(parents=True,exist_ok=True)

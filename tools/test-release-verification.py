@@ -137,7 +137,9 @@ with (out/'invocations').open('a') as calls:calls.write('build\\n')
 
             def execute(*args, **kwargs):
                 calls.append(True)
+                console=server.parent/'console.log';console.write_text('disposable actual verification console')
                 result = {'failure': None, 'passed': 1, 'build': '1', 'voice': '2.1.17',
+                          'log':str(console),'console_sha256':sha(console),
                           'jar_sha256': sha(release), 'fixture_sha256': sha(fixture),
                           'server_sha256': sha(server), 'voice_sha512': voice_hash,
                           **{key: sha(path) for key, path in inputs.items()}}
@@ -158,6 +160,48 @@ with (out/'invocations').open('a') as calls:calls.write('build\\n')
             run(3)
             fixture.write_bytes(b'replaced fixture')
             run(4)
+            (server.parent/'console.log').unlink()
+            run(5)
+            (server.parent/'console.log').write_text('replacement console with no pass evidence')
+            run(6)
+
+    def test_transient_or_invalid_buildtools_metadata_never_overwrites_the_manifest(self):
+        resolver=module('spigot_resolution_test','tools/resolve-compatibility.py')
+        from urllib.error import HTTPError,URLError
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);resolver.ROOT=root;resolver.MC=['1.16.5']
+            (root/'compatibility-policy.json').write_text('{"voiceOverrides":{}}')
+            manifest=root/'compatibility.json'
+            official={'id':'legacy','version_number':'spigot-1.0.11','version_type':'release',
+                      'date_published':'2026-01-01','loaders':['paper'],'game_versions':['1.16.5'],
+                      'files':[{'primary':True,'url':'https://cdn.modrinth.com/official.jar','hashes':{'sha512':'1'*128}}]}
+            mode=[None]
+            def read(url):
+                if 'modrinth.com' in url:return [official]
+                if 'fill.papermc.io' in url:return {'versions':{'1.16':['1.16.5']}}
+                if 'purpurmc.org' in url:return {'versions':['1.16.5']}
+                if 'promotions_slim.json' in url:return {'promos':{}}
+                if 'hub.spigotmc.org' in url:
+                    if isinstance(mode[0],Exception):raise mode[0]
+                    if mode[0]=='malformed':return {'refs':{'Bukkit':None}}
+                    return {'refs':{key:'upstream-commit' for key in ('BuildData','Bukkit','CraftBukkit','Spigot')}}
+                raise AssertionError(url)
+            for failure in [URLError('transport timeout'),HTTPError('fixture',500,'temporary',None,None),
+                            ValueError('invalid JSON'),'malformed']:
+                mode[0]=failure;manifest.write_bytes(b'previous complete release manifest')
+                with patch.object(resolver,'read',read),self.assertRaises((URLError,ValueError)):
+                    resolver.resolve()
+                self.assertEqual(b'previous complete release manifest',manifest.read_bytes())
+                if isinstance(failure,HTTPError):failure.close()
+            mode[0]=HTTPError('fixture',404,'definitive absence',None,None)
+            with patch.object(resolver,'read',read),contextlib.redirect_stdout(io.StringIO()):resolver.resolve()
+            mode[0].close()
+            result=json.loads(manifest.read_text())
+            self.assertFalse(any(r['platform']=='spigot' for r in result['entries']))
+            self.assertIn({'platform':'spigot','minecraft':'1.16.5','reason':'No official BuildTools version'},result['excluded'])
+            mode[0]=None
+            with patch.object(resolver,'read',read),contextlib.redirect_stdout(io.StringIO()):resolver.resolve()
+            self.assertTrue(any(r['platform']=='spigot' for r in json.loads(manifest.read_text())['entries']))
 
     def test_concurrent_verified_downloads_publish_complete_shared_artifacts(self):
         download = module('download_race_test', 'paper/26.3/tools/integration.py').download

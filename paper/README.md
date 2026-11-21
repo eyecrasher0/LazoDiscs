@@ -67,7 +67,8 @@ their Plasmo Voice volume settings. See the [detailed configuration guide](26.3/
 Signed links remain intact on discs. Media session cookies belong to one recording's
 load/playback and are not shared with other recordings or persisted on discs.
 Spotify matching requires an equal normalized song title after known display labels
-are removed; an unrelated longer title is rejected.
+are removed; an unrelated longer title is rejected. A custom disc title remains a
+display label and cannot replace missing Spotify metadata.
 
 Paper 1.21.4+ replaces the vanilla song with a silent, long-lived registry entry,
 preserving comparator strength and the native playing state until custom audio ends.

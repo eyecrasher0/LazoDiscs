@@ -27,15 +27,19 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.http.auth.AuthState;
 import org.apache.http.client.CookieStore;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.methods.HttpRequestWrapper;
+import org.apache.http.impl.client.BasicAuthCache;
 import org.apache.http.impl.client.BasicCookieStore;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.client.protocol.HttpClientContext;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.HttpResponseInterceptor;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -43,17 +47,25 @@ import org.apache.http.protocol.HttpCoreContext;
 
 final class DirectMediaSource extends HttpAudioSourceManager {
     private final Consumer<String> validate;
-    private final ThreadLocal<CookieStore> recording = new ThreadLocal<>();
+    private final ThreadLocal<RecordingAccess> recording = new ThreadLocal<>();
     private final HttpInterfaceManager requests = HttpClientTools.createDefaultThreadLocalManager();
     private final HttpInterfaceManager hls = HttpClientTools.createDefaultThreadLocalManager();
 
     DirectMediaSource(Consumer<String> validate) {
         this.validate = validate;
-        // The pooled client/context must never retain a previous recording's access.
         HttpContextFilter cleanup = new HttpContextFilter() {
             public void onContextOpen(HttpClientContext context) {}
-            public void onContextClose(HttpClientContext context) { context.setCookieStore(new BasicCookieStore()); }
-            public void onRequest(HttpClientContext context, HttpUriRequest request, boolean repeated) {}
+            public void onContextClose(HttpClientContext context) {
+                context.removeAttribute(HttpClientContext.COOKIE_STORE);
+                context.removeAttribute(HttpClientContext.CREDS_PROVIDER);
+                context.removeAttribute(HttpClientContext.AUTH_CACHE);
+                context.removeAttribute(HttpClientContext.TARGET_AUTH_STATE);
+                context.removeAttribute(HttpClientContext.PROXY_AUTH_STATE);
+                context.removeAttribute(HttpClientContext.USER_TOKEN);
+            }
+            public void onRequest(HttpClientContext context, HttpUriRequest request, boolean repeated) {
+                validate.accept(request.getURI().toString());
+            }
             public boolean onRequestResponse(HttpClientContext context, HttpUriRequest request, HttpResponse response) { return false; }
             public boolean onRequestException(HttpClientContext context, HttpUriRequest request, Throwable error) { return false; }
         };
@@ -62,30 +74,44 @@ final class DirectMediaSource extends HttpAudioSourceManager {
         // Probes return redirects to the source resolver; HLS must follow its
         // permitted playlist/segment redirects while applying the same policy.
         requests.configureBuilder(builder -> builder.setRedirectStrategy(new HttpClientTools.NoRedirectsStrategy()));
-        configureBuilder(builder -> {
-            builder.addInterceptorFirst((HttpRequestInterceptor) (request, context) -> {
-                URI origin = URI.create(HttpCoreContext.adapt(context).getTargetHost().toURI());
-                validate.accept(origin.resolve(request.getRequestLine().getUri()).toString());
-            });
-            builder.addInterceptorFirst((HttpResponseInterceptor) (response, context) -> {
-                int status = response.getStatusLine().getStatusCode();
-                if (status < 300 || status >= 400 || response.getFirstHeader("Location") == null) return;
-                HttpCoreContext http = HttpCoreContext.adapt(context);
-                URI origin = URI.create(http.getTargetHost().toURI()).resolve(http.getRequest().getRequestLine().getUri());
-                validate.accept(origin.resolve(response.getFirstHeader("Location").getValue()).toString());
-            });
-        });
+        configureBuilder(builder -> builder.addInterceptorFirst((HttpResponseInterceptor) (response, context) -> {
+            int status = response.getStatusLine().getStatusCode();
+            var location = response.getFirstHeader("Location");
+            if (status < 300 || status >= 400 || location == null) return;
+            var request = (HttpRequestWrapper) HttpCoreContext.adapt(context).getRequest();
+            URI base = ((HttpUriRequest) request.getOriginal()).getURI();
+            String reference = location.getValue();
+            String target = resolve(base, reference).toString();
+            validate.accept(target);
+            if (reference.startsWith("?")) response.setHeader("Location", target);
+        }));
     }
 
     @Override public HttpInterface getHttpInterface() {
-        CookieStore cookies = recording.get();
-        return http(requests, cookies == null ? new BasicCookieStore() : cookies);
+        RecordingAccess access = recording.get();
+        return http(requests, access == null ? new RecordingAccess() : access);
     }
 
-    private static HttpInterface http(HttpInterfaceManager manager, CookieStore cookies) {
+    private static HttpInterface http(HttpInterfaceManager manager, RecordingAccess access) {
         HttpInterface connection = manager.getInterface();
-        connection.getContext().setCookieStore(cookies);
+        HttpClientContext context = connection.getContext();
+        context.setCookieStore(access.cookies);
+        context.setCredentialsProvider(access.credentials);
+        context.setAuthCache(new BasicAuthCache());
+        context.setAttribute(HttpClientContext.TARGET_AUTH_STATE, new AuthState());
+        context.setAttribute(HttpClientContext.PROXY_AUTH_STATE, new AuthState());
         return connection;
+    }
+
+    private static URI resolve(URI base, String reference) {
+        if (reference.startsWith("?")) return URI.create(base.toString().split("[?#]", 2)[0] + reference);
+        if (reference.isEmpty()) return URI.create(base.toString().split("#", 2)[0]);
+        return base.resolve(reference);
+    }
+
+    private static final class RecordingAccess {
+        final CookieStore cookies = new BasicCookieStore();
+        final CredentialsProvider credentials = new BasicCredentialsProvider();
     }
 
     @Override public void configureRequests(Function<RequestConfig, RequestConfig> configurator) {
@@ -106,8 +132,8 @@ final class DirectMediaSource extends HttpAudioSourceManager {
     @Override public AudioItem loadItem(AudioPlayerManager manager, AudioReference reference) {
         AudioReference http = getAsHttpReference(reference);
         if (http == null) return null;
-        CookieStore previous = recording.get();
-        recording.set(new BasicCookieStore());
+        RecordingAccess previous = recording.get();
+        recording.set(new RecordingAccess());
         try {
             // Follow references inside this load so redirects keep this recording's cookies.
             for (int redirects = 0; redirects < 10; redirects++) {
@@ -133,16 +159,16 @@ final class DirectMediaSource extends HttpAudioSourceManager {
     }
 
     @Override protected AudioTrack createTrack(AudioTrackInfo info, MediaContainerDescriptor container) {
-        CookieStore cookies = recording.get();
-        return track(info, container, cookies == null ? new BasicCookieStore() : cookies);
+        RecordingAccess access = recording.get();
+        return track(info, container, access == null ? new RecordingAccess() : access);
     }
 
     @Override public AudioTrack decodeTrack(AudioTrackInfo info, DataInput input) throws IOException {
         MediaContainerDescriptor container = decodeTrackFactory(input);
-        return container == null ? null : track(info, container, new BasicCookieStore());
+        return container == null ? null : track(info, container, new RecordingAccess());
     }
 
-    private AudioTrack track(AudioTrackInfo info, MediaContainerDescriptor container, CookieStore cookies) {
+    private AudioTrack track(AudioTrackInfo info, MediaContainerDescriptor container, RecordingAccess access) {
         MediaContainerDescriptor selected = container;
         if (container.probe instanceof M3uPlaylistContainerProbe) {
             selected = new MediaContainerDescriptor(container.probe, container.parameters) {
@@ -150,19 +176,19 @@ final class DirectMediaSource extends HttpAudioSourceManager {
                     var segments = new RecordingHlsSegments(track.identifier, "hls-inner".equals(parameters));
                     return new MpegTsM3uStreamAudioTrack(track) {
                         @Override protected M3uStreamSegmentUrlProvider getSegmentUrlProvider() { return segments; }
-                        @Override protected HttpInterface getHttpInterface() { return http(hls, cookies); }
+                        @Override protected HttpInterface getHttpInterface() { return http(hls, access); }
                     };
                 }
             };
         }
         return new HttpAudioTrack(info, selected, this) {
             @Override public void process(LocalAudioTrackExecutor executor) throws Exception {
-                CookieStore previous = recording.get();
-                recording.set(cookies);
+                RecordingAccess previous = recording.get();
+                recording.set(access);
                 try { super.process(executor); }
                 finally { if (previous == null) recording.remove(); else recording.set(previous); }
             }
-            @Override protected AudioTrack makeShallowClone() { return track(info, container, cookies); }
+            @Override protected AudioTrack makeShallowClone() { return track(info, container, access); }
         };
     }
 
@@ -186,7 +212,7 @@ final class DirectMediaSource extends HttpAudioSourceManager {
             for (String text : lines) {
                 ExtendedM3uParser.Line line = ExtendedM3uParser.parseLine(text);
                 if (line.isDirective()) variant = "EXT-X-STREAM-INF".equals(line.directiveName);
-                else if (variant && line.isData()) return media = effective.resolve(line.lineData).toString();
+                else if (variant && line.isData()) return media = resolve(effective, line.lineData).toString();
             }
             throw new IllegalStateException("No streams listed in HLS stream list.");
         }
@@ -196,7 +222,7 @@ final class DirectMediaSource extends HttpAudioSourceManager {
             URI effective = connection.getFinalLocation();
             List<SegmentInfo> resolved = new ArrayList<>(segments.size());
             for (SegmentInfo segment : segments) {
-                resolved.add(new SegmentInfo(effective.resolve(segment.url).toString(), segment.duration, segment.name));
+                resolved.add(new SegmentInfo(resolve(effective, segment.url).toString(), segment.duration, segment.name));
             }
             return resolved;
         }

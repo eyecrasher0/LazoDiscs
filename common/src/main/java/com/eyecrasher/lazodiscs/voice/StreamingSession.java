@@ -9,6 +9,7 @@ import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -60,7 +61,7 @@ public final class StreamingSession implements AutoCloseable {
         load = AudioLoadExecutor.submit(() -> {
             try {
                 if (closed.get()) return;
-                var opened = LavaPcmFeeder.openStream(disc.url(), disc.title(), disc.volume(),
+                var opened = LavaPcmFeeder.openStream(disc.url(), disc.volume(),
                         error -> { if (!closed.get()) failure = messageOf(error); }, closed::get);
                 synchronized (this) {
                     if (closed.get()) { opened.close(); return; }
@@ -70,7 +71,7 @@ public final class StreamingSession implements AutoCloseable {
                         @Override public void onTrackStuck(AudioPlayer player, AudioTrack track, long threshold) { failure = LazoDiscsText.trackStuck(threshold); }
                     });
                     lastFrame = System.nanoTime();
-                    sender = scheduler.scheduleAtFixedRate(this::tick, 0, 20, TimeUnit.MILLISECONDS);
+                    sender = scheduler.scheduleAtFixedRate(() -> tick(disc.id()), 0, 20, TimeUnit.MILLISECONDS);
                 }
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -80,13 +81,18 @@ public final class StreamingSession implements AutoCloseable {
         }, () -> finish(LazoDiscsText.audioLoadBusy(), false));
         if (closed.get()) load.cancel(false);
     }
-    private void tick() {
+    private void tick(UUID disc) {
         if (closed.get()) return;
         try {
             var opened = playback;
             var frame = opened.player().provide();
             if (closed.get()) return;
-            if (frame != null) { sink.frame(frame.getData(), sequence++); lastFrame = System.nanoTime(); return; }
+            if (frame != null) {
+                sink.frame(frame.getData(), sequence++);
+                PlaybackProbe.frameProvided(disc);
+                lastFrame = System.nanoTime();
+                return;
+            }
             if (failure != null) { finish(failure, false); return; }
             var state = opened.track().getState();
             if (state == AudioTrackState.FINISHED || state == AudioTrackState.INACTIVE) {
