@@ -24,6 +24,7 @@ public final class LegacyClient {
             current.send(new ServerboundCustomPayloadPacket(LegacyNetwork.CHANNEL, new FriendlyByteBuf(Unpooled.wrappedBuffer(LegacyAudioPacket.hello().encode()))));
         }
         if (current == null) connection = null;
-        LegacyClientAudio.prune(client.level != null);
+        LegacyClientAudio.prune(client.level != null,
+                client.level == null ? null : client.level.dimension().location().toString());
     }
 }

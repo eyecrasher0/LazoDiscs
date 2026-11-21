@@ -20,11 +20,19 @@ public final class VoiceClient {
     }
     public static final class Engine {
         public long context = 1;
+        public long lazyContext;
         public final List<Source> sources = new ArrayList<>();
         private final List<Runnable> pending = new ArrayList<>();
         public void runInContext(Runnable action) { pending.add(action); }
         public long getContextPointer() { return context; }
-        public Source createSource() { Source source=new Source(sources.size()+1);sources.add(source);return source; }
+        public Source createSource() {
+            if (context == 0) {
+                if (lazyContext == 0) return null;
+                context = lazyContext;
+                org.lwjgl.openal.AL.capabilities = new Object();
+            }
+            Source source=new Source(sources.size()+1);sources.add(source);return source;
+        }
         public void flush() { var work=List.copyOf(pending);pending.clear();work.forEach(Runnable::run); }
     }
     public static final class Source {

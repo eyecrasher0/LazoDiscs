@@ -135,7 +135,9 @@ public final class PackagedLoggingSmoke {
                     String target = input.readLine();
                     String header;
                     while ((header = input.readLine()) != null && !header.isEmpty()) { /* Consume real request headers. */ }
-                    peer.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".getBytes("US-ASCII"));
+                    peer.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n"
+                            + "Set-Cookie: fixture-cookie=cookie-secret; Domain=not-the-origin.invalid\r\n"
+                            + "Set-Cookie: fixture-expiry=malformed-cookie-secret; Expires=invalid-expiry\r\n\r\nOK").getBytes("US-ASCII"));
                     peer.getOutputStream().flush();
                     received.complete(target);
                 } catch (Throwable error) { received.completeExceptionally(error); }
@@ -152,11 +154,22 @@ public final class PackagedLoggingSmoke {
                         .getMethod("execute", requestType).invoke(client, request);
                 ((java.io.Closeable) response).close();
                 require(received.get(5, java.util.concurrent.TimeUnit.SECONDS).contains("token=query-secret"), "Signed request did not reach the media server");
+                boolean cookieRejected = false;
+                boolean invalidCookieHeader = false;
                 for (LogRecord event : EVENTS) {
                     String rendered = event.getMessage();
-                    require(!rendered.contains("path-secret") && !rendered.contains("query-secret") && !rendered.contains("header-secret"),
+                    if (event.getLoggerName().endsWith(".ResponseProcessCookies") && event.getLevel().equals(Level.WARNING)) {
+                        if (rendered.startsWith("Cookie rejected")) {
+                            cookieRejected = true;
+                            require(rendered.contains("invalid domain attribute"),"Cookie rejection category was lost");
+                        }
+                        if (rendered.startsWith("Invalid cookie header")) invalidCookieHeader = true;
+                    }
+                    require(!rendered.contains("path-secret") && !rendered.contains("query-secret") && !rendered.contains("header-secret") && !rendered.contains("cookie-secret"),
                             "Bundled HTTP protocol logging leaked a request target or credential: " + rendered);
                 }
+                require(cookieRejected, "Real invalid-cookie warning was not exercised");
+                require(invalidCookieHeader,"Real malformed-cookie-header warning was not exercised");
                 EVENTS.clear();
             } finally { ((java.io.Closeable) client).close(); }
             responder.join(5000);

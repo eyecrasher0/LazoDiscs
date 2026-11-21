@@ -16,6 +16,7 @@ class LegacyClientAudioTest {
     @BeforeEach void setup() {
         LegacyClientAudio.prune(false);engine.flush();engine.sources.clear();
         engine.context=1;
+        engine.lazyContext=0;
         AL10.resetContext();
         AL10.allocations=0;AL10.deletions=0;AL10.processed=false;
         MemoryUtil.allocations=0;
@@ -43,6 +44,18 @@ class LegacyClientAudioTest {
         accept(frame(id,10));accept(frame(id,9));engine.flush();assertEquals(1,engine.sources.get(0).writes);
         accept(frame(id,11));engine.flush();assertEquals(2,engine.sources.get(0).writes);
     }
+    @Test void firstFrameInitializesALazyVoiceSoundContextWithoutDroppingAudio() {
+        engine.context=0;engine.lazyContext=7;
+        accept(LegacyAudioPacket.stop(UUID.randomUUID()));engine.flush();
+        LegacyClientAudio.prune(true);engine.flush();
+        assertEquals(0,engine.context,"Cleanup must not start an idle Voice engine");
+        UUID id=UUID.randomUUID();accept(frame(id,0));engine.flush();
+        assertEquals(7,engine.context,"Voice creates its OpenAL context on the first source");
+        assertEquals(1,engine.sources.size());assertEquals(1,engine.sources.get(0).writes);
+        assertEquals(1,OpusDecoder.opened);
+        accept(LegacyAudioPacket.stop(id));engine.flush();
+        assertTrue(engine.sources.get(0).closed);assertTrue(MemoryUtil.LIVE.isEmpty());
+    }
     @Test void stopDimensionChangeAndDisconnectReleaseDecoderAndSource() {
         UUID id=UUID.randomUUID();accept(frame(id,0));engine.flush();
         accept(LegacyAudioPacket.stop(id));engine.flush();
@@ -57,6 +70,12 @@ class LegacyClientAudioTest {
         for(int i=0;i<40;i++)accept(frame(UUID.randomUUID(),0));engine.flush();
         assertEquals(32,engine.sources.size());assertEquals(32,OpusDecoder.opened);
         LegacyClientAudio.prune(false);engine.flush();assertEquals(32,OpusDecoder.closed);
+    }
+    @Test void changingDimensionRetiresAudioWithoutReceivingAnotherFrame() {
+        UUID id=UUID.randomUUID();accept(frame(id,0));engine.flush();
+        LegacyClientAudio.prune(true,"minecraft:the_nether");engine.flush();
+        assertTrue(engine.sources.get(0).closed);assertEquals(1,OpusDecoder.closed);
+        assertTrue(MemoryUtil.LIVE.isEmpty());assertTrue(AL10.buffers.isEmpty());
     }
     @Test void naturalEndDrainsQueuedAudioWhileManualStopRemainsImmediate() throws Exception {
         UUID id=UUID.randomUUID();accept(frame(id,0));accept(frame(id,1));engine.flush();

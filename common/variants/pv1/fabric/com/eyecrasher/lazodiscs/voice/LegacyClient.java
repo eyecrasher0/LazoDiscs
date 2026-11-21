@@ -21,6 +21,7 @@ public final class LegacyClient implements ClientModInitializer {
             var payload = PacketByteBufs.create(); payload.writeBytes(LegacyAudioPacket.hello().encode());
             ClientPlayNetworking.send(CHANNEL, payload);
         });
-        ClientTickEvents.END_CLIENT_TICK.register(client -> LegacyClientAudio.prune(client.level != null));
+        ClientTickEvents.END_CLIENT_TICK.register(client -> LegacyClientAudio.prune(client.level != null,
+                client.level == null ? null : client.level.dimension().location().toString()));
     }
 }

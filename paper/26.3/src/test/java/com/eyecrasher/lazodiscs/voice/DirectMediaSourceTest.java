@@ -27,8 +27,11 @@ class DirectMediaSourceTest {
         final CooperativeAudioPlayerManager manager = new CooperativeAudioPlayerManager();
         final AtomicInteger forbiddenRequests = new AtomicInteger();
         final AtomicInteger allowedRequests = new AtomicInteger();
+        final AtomicInteger hlsPlaylistRequests = new AtomicInteger();
+        final AtomicInteger hlsSegmentRequests = new AtomicInteger();
         final AtomicBoolean redirectPlayback = new AtomicBoolean();
         volatile String query;
+        volatile String playlistQuery,segmentQuery;
 
         Fixture() throws Exception {
             manager.getConfiguration().setOutputFormat(StandardAudioDataFormats.DISCORD_PCM_S16_LE);
@@ -44,10 +47,44 @@ class DirectMediaSourceTest {
                 if (path.equals("/redirect.wav") || (path.equals("/late.wav") && redirectPlayback.get())) {
                     exchange.getResponseHeaders().set("Location", denied("/forbidden.wav"));
                     exchange.sendResponseHeaders(302, -1);
+                } else if (path.equals("/blocked-playlist-redirect.m3u8") || path.equals("/blocked-segment-redirect.ts")) {
+                    exchange.getResponseHeaders().set("Location", denied(path.startsWith("/blocked-playlist")
+                            ? "/forbidden.m3u8" : "/forbidden.ts"));
+                    exchange.sendResponseHeaders(302, -1);
+                } else if (path.equals("/playlist-redirect.m3u8") || path.equals("/segment-redirect.ts")) {
+                    exchange.getResponseHeaders().set("Location", allowed(path.startsWith("/playlist")
+                            ? "/allowed-inner.m3u8?signature=exact%2Bplaylist" : "/tone.ts?signature=exact%2Bsegment"));
+                    exchange.sendResponseHeaders(302, -1);
                 } else {
                     byte[] body;
                     String type;
-                    if (path.equals("/list.m3u")) {
+                    if (path.equals("/redirected-master.m3u8")) {
+                        body = ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n" + allowed("/blocked-playlist-redirect.m3u8") + "\n")
+                                .getBytes(StandardCharsets.UTF_8);
+                        type = "application/vnd.apple.mpegurl";
+                    } else if (path.equals("/redirected-segments.m3u8")) {
+                        body = ("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:1.0,\n"
+                                + allowed("/blocked-segment-redirect.ts") + "\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);
+                        type = "application/vnd.apple.mpegurl";
+                    } else if (path.equals("/allowed-outer.m3u8")) {
+                        body = ("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=64000\n" + allowed("/playlist-redirect.m3u8") + "\n")
+                                .getBytes(StandardCharsets.UTF_8);
+                        type = "application/vnd.apple.mpegurl";
+                    } else if (path.equals("/allowed-inner.m3u8")) {
+                        hlsPlaylistRequests.incrementAndGet();
+                        playlistQuery=exchange.getRequestURI().getRawQuery();
+                        body = ("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:0.4,\n"
+                                + allowed("/segment-redirect.ts") + "\n#EXT-X-ENDLIST\n").getBytes(StandardCharsets.UTF_8);
+                        type = "application/vnd.apple.mpegurl";
+                    } else if (path.equals("/tone.ts")) {
+                        hlsSegmentRequests.incrementAndGet();
+                        segmentQuery=exchange.getRequestURI().getRawQuery();
+                        try (var input = DirectMediaSourceTest.class.getResourceAsStream("/audio/hls-control.ts")) {
+                            if (input == null) throw new java.io.IOException("Missing generated HLS control audio");
+                            body = input.readAllBytes();
+                        }
+                        type = "video/mp2t";
+                    } else if (path.equals("/list.m3u")) {
                         body = ("#EXTM3U\n" + denied("/forbidden.wav") + "\n").getBytes(StandardCharsets.UTF_8);
                         type = "audio/x-mpegurl";
                     } else if (path.equals("/master.m3u8")) {
@@ -157,6 +194,33 @@ class DirectMediaSourceTest {
             blocked(fixture.playbackFailure(fixture.load(fixture.allowed("/segments.m3u8"))));
             assertTrue(fixture.allowedRequests.get() >= 4, "Both HLS probes and playback requests must run");
             assertEquals(0, fixture.forbiddenRequests.get());
+        }
+    }
+
+    @Test void permittedHlsPlaylistAndSegmentRedirectsProduceDecodedAudio() throws Exception {
+        try (var fixture = new Fixture()) {
+            var player = fixture.manager.createPlayer();
+            try {
+                AudioPlaybackPreparation.start(player, fixture.load(fixture.allowed("/allowed-outer.m3u8")), null);
+                var frame = player.provide();
+                assertNotNull(frame,"The permitted redirect control must reach the real MPEG-TS/AAC decoder");
+                boolean nonzero=false;
+                for (byte sample:frame.getData()) nonzero |= sample!=0;
+                assertTrue(nonzero,"The decoded control tone must not be silent");
+                assertTrue(fixture.hlsPlaylistRequests.get()>0);assertTrue(fixture.hlsSegmentRequests.get()>0);
+                assertEquals("signature=exact%2Bplaylist",fixture.playlistQuery);
+                assertEquals("signature=exact%2Bsegment",fixture.segmentQuery);
+                assertEquals(0,fixture.forbiddenRequests.get());
+            } finally { player.destroy(); }
+        }
+    }
+
+    @Test void hlsPlaylistAndSegmentRedirectsNeverContactDeniedHost() throws Exception {
+        try (var fixture = new Fixture()) {
+            blocked(fixture.playbackFailure(fixture.load(fixture.allowed("/redirected-master.m3u8"))));
+            blocked(fixture.playbackFailure(fixture.load(fixture.allowed("/redirected-segments.m3u8"))));
+            assertTrue(fixture.allowedRequests.get()>=6,"Both allowed HLS redirect endpoints must run");
+            assertEquals(0,fixture.forbiddenRequests.get());
         }
     }
 

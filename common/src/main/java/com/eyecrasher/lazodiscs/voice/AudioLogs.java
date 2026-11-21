@@ -111,6 +111,18 @@ public final class AudioLogs {
                     if (httpDetails && ("debug".equals(operation) || "trace".equals(operation))) return null;
                     Throwable error = args.length == 2 ? (Throwable) args[1] : null;
                     String message = redact(String.valueOf(args[0]), error);
+                    if (httpDetails && name.endsWith(".protocol.ResponseProcessCookies")) {
+                        // These two upstream warnings inline raw Cookie/Header values,
+                        // including request paths, and have no separate Throwable.
+                        // Keep the warning and its rejection category without those values.
+                        if (message.startsWith("Cookie rejected [")) {
+                            String reason = message.contains("] Illegal 'domain' attribute ") ? ": invalid domain attribute"
+                                    : message.contains("] Illegal 'path' attribute ") ? ": invalid path attribute" : "";
+                            message = "Cookie rejected [cookie details omitted]" + reason;
+                        } else if (message.startsWith("Invalid cookie header: \"")) {
+                            message = "Invalid cookie header [cookie details omitted]";
+                        }
+                    }
                     String stack = redactedStack(error);
                     args[0] = stack == null ? message : message + System.lineSeparator() + stack;
                     if (stack != null) args[1] = null;

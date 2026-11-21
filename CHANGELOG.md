@@ -2,6 +2,7 @@
 
 ## 1.0.8
 
+- Initialize Voice 1's lazy sound context on the first disc frame and retire audio immediately when the listener changes dimensions. Preserve permitted HLS playlist/segment redirects and redact raw cookie warnings without hiding unrelated errors.
 - Reclaim all consumed Voice 1 OpenAL buffers before resuming an underrun, preventing old audio from being replayed after a client stall.
 - Preserve the last queued Voice 1 frames at natural EOF and let the client finish its PCM queue; extraction still stops immediately. Keep malformed redirect credentials out of logs while retaining named Java module stack frames.
 - Bound and release Voice 1 client PCM storage and OpenAL buffers while keeping the official Voice decoder and engine. Retire sender pools without interrupting cold Forge archive reads.

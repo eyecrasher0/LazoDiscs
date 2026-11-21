@@ -30,7 +30,6 @@ public final class LegacyClientAudio {
                         long context = ((Number) ReflectiveApi.call(engine, "getContextPointer")).longValue();
                         Object capabilities = capabilities(context);
                         discardInvalidContexts(engine, context, capabilities);
-                        if (context == 0) return;
                         Channel channel = CHANNELS.get(packet.source);
                         if (packet.kind == LegacyAudioPacket.END) {
                             if (channel != null) channel.draining = true;
@@ -52,8 +51,17 @@ public final class LegacyClientAudio {
                             Object source = ReflectiveApi.call(engine, "createSource");
                             if (source == null) return;
                             try {
+                                // Voice 1 initializes its context lazily inside createSource.
+                                // Capture the context and capabilities after that first source.
+                                context = ((Number) ReflectiveApi.call(engine, "getContextPointer")).longValue();
+                                capabilities = capabilities(context);
+                                discardInvalidContexts(engine, context, capabilities);
+                                if (context == 0) {
+                                    ReflectiveApi.call(source, "close");
+                                    return;
+                                }
                                 Object decoder = decoderFactory.newInstance(rate, rate / 50 * 2, 4096);
-                                channel = new Channel(source, decoder, engine, context, capabilities, rate);
+                                channel = new Channel(source, decoder, engine, context, capabilities, rate, packet.world);
                             } catch (ReflectiveOperationException | RuntimeException | LinkageError error) {
                                 ReflectiveApi.call(source, "close");
                                 throw error;
@@ -86,6 +94,10 @@ public final class LegacyClientAudio {
 
     /** Called on client ticks, including after disconnect and dimension changes. */
     public static void prune(boolean connected) {
+        prune(connected, null);
+    }
+
+    public static void prune(boolean connected, String world) {
         if (!connected) reported.set(false);
         try {
             Object engine = Class.forName("su.plo.voice.client.VoiceClient").getMethod("getSoundEngine").invoke(null);
@@ -98,7 +110,8 @@ public final class LegacyClientAudio {
                     discardInvalidContexts(engine, context, capabilities);
                     CHANNELS.entrySet().removeIf(entry -> {
                         Channel channel = entry.getValue();
-                        if (connected && System.nanoTime() - channel.lastFrame < 2_000_000_000L
+                        if (connected && (world == null || world.equals(channel.world))
+                                && System.nanoTime() - channel.lastFrame < 2_000_000_000L
                                 && (!channel.draining || !channel.drained())) return false;
                         entry.getValue().close();
                         return true;
@@ -129,6 +142,7 @@ public final class LegacyClientAudio {
     }
     private static final class Channel {
         final Object source, decoder, engine, capabilities;
+        final String world;
         final long context;
         final int rate;
         final int[] buffers = new int[8];
@@ -137,9 +151,9 @@ public final class LegacyClientAudio {
         int allocated, availableCount;
         boolean draining;
         long sequence = -1, lastFrame = System.nanoTime();
-        Channel(Object source, Object decoder, Object engine, long context, Object capabilities, int rate) {
+        Channel(Object source, Object decoder, Object engine, long context, Object capabilities, int rate, String world) {
             this.source = source; this.decoder = decoder; this.engine = engine; this.context = context; this.capabilities = capabilities;
-            this.rate = rate;
+            this.rate = rate; this.world = world;
         }
 
         void write(byte[] frame) throws ReflectiveOperationException {
