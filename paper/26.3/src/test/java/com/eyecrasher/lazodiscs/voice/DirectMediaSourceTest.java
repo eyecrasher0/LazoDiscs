@@ -348,6 +348,43 @@ class DirectMediaSourceTest {
         }
     }
 
+    @Test void emptyLocationRetriesTheExactSignedUrlWithTheRecordingsOwnCookie() throws Exception {
+        try (var fixture = new Fixture()) {
+            String target = "/signed/song.wav?token=exact%2B%2f&name=track%20one";
+            String cookie = "lazo-session=redirect-fixture";
+            var requests = new ConcurrentLinkedQueue<String>();
+            var initial = new AtomicBoolean(true);
+            var authorized = new AtomicInteger();
+            var denied = new AtomicInteger();
+            fixture.http.createContext("/signed/", exchange -> {
+                try (exchange) {
+                    String requested = exchange.getRequestURI().toString();
+                    requests.add(requested);
+                    if (!target.equals(requested)) {
+                        exchange.sendResponseHeaders(404, -1);
+                    } else if (initial.getAndSet(false)) {
+                        exchange.getResponseHeaders().set("Set-Cookie", cookie + "; Path=/signed/");
+                        redirect(exchange, "");
+                    } else if (cookie.equals(exchange.getRequestHeaders().getFirst("Cookie"))) {
+                        authorized.incrementAndGet();
+                        respond(exchange, "audio/wav", wav());
+                    } else {
+                        denied.incrementAndGet();
+                        exchange.sendResponseHeaders(403, -1);
+                    }
+                }
+            });
+            String url = fixture.allowed(target);
+            AudioTrack track = fixture.load(url);
+            assertEquals(url, track.getIdentifier());
+            assertPlays(fixture, track);
+            assertTrue(authorized.get() >= 2, "Both the redirected probe and decoder must use the session cookie");
+            assertThrows(ExecutionException.class, () -> fixture.load(url));
+            assertEquals(1, denied.get(), "An unrelated recording must arrive without the session cookie");
+            assertTrue(requests.stream().allMatch(target::equals), requests.toString());
+        }
+    }
+
     @Test void basicAuthStaysWithTheRecordingAcrossRedirectsAndPlayback() throws Exception {
         for (boolean hls : List.of(false, true)) {
             try (var fixture = new Fixture()) {

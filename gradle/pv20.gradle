@@ -4,5 +4,7 @@ def pv20Sources = tasks.register('pv20Sources', Sync) {
     from('../../common/variants/pv20/java')
     into layout.buildDirectory.dir('generated/sources/pv20')
 }
-sourceSets.main.java.setSrcDirs([pv20Sources, file('../../common/src/main/java')])
+lazoCommonAudio.setExcludes(lazoVoice1Sources)
+sourceSets.main.java.setSrcDirs([pv20Sources])
+sourceSets.main.java.source(lazoCommonAudio)
 dependencies { compileOnly 'javax.inject:javax.inject:1' }

@@ -175,33 +175,59 @@ with (out/'invocations').open('a') as calls:calls.write('build\\n')
             official={'id':'legacy','version_number':'spigot-1.0.11','version_type':'release',
                       'date_published':'2026-01-01','loaders':['paper'],'game_versions':['1.16.5'],
                       'files':[{'primary':True,'url':'https://cdn.modrinth.com/official.jar','hashes':{'sha512':'1'*128}}]}
-            mode=[None]
+            valid_refs = {key: digit * 40 for key, digit in zip(('BuildData', 'Bukkit', 'CraftBukkit', 'Spigot'), 'aB3d')}
+            build_response = {'refs': valid_refs}
             def read(url):
                 if 'modrinth.com' in url:return [official]
                 if 'fill.papermc.io' in url:return {'versions':{'1.16':['1.16.5']}}
                 if 'purpurmc.org' in url:return {'versions':['1.16.5']}
                 if 'promotions_slim.json' in url:return {'promos':{}}
                 if 'hub.spigotmc.org' in url:
-                    if isinstance(mode[0],Exception):raise mode[0]
-                    if mode[0]=='malformed':return {'refs':{'Bukkit':None}}
-                    return {'refs':{key:'upstream-commit' for key in ('BuildData','Bukkit','CraftBukkit','Spigot')}}
+                    if isinstance(build_response, Exception):
+                        raise build_response
+                    return build_response
                 raise AssertionError(url)
-            for failure in [URLError('transport timeout'),HTTPError('fixture',500,'temporary',None,None),
-                            ValueError('invalid JSON'),'malformed']:
-                mode[0]=failure;manifest.write_bytes(b'previous complete release manifest')
-                with patch.object(resolver,'read',read),self.assertRaises((URLError,ValueError)):
-                    resolver.resolve()
-                self.assertEqual(b'previous complete release manifest',manifest.read_bytes())
-                if isinstance(failure,HTTPError):failure.close()
-            mode[0]=HTTPError('fixture',404,'definitive absence',None,None)
-            with patch.object(resolver,'read',read),contextlib.redirect_stdout(io.StringIO()):resolver.resolve()
-            mode[0].close()
-            result=json.loads(manifest.read_text())
-            self.assertFalse(any(r['platform']=='spigot' for r in result['entries']))
-            self.assertIn({'platform':'spigot','minecraft':'1.16.5','reason':'No official BuildTools version'},result['excluded'])
-            mode[0]=None
-            with patch.object(resolver,'read',read),contextlib.redirect_stdout(io.StringIO()):resolver.resolve()
-            self.assertTrue(any(r['platform']=='spigot' for r in json.loads(manifest.read_text())['entries']))
+
+            previous = b'previous complete release manifest'
+            manifest.write_bytes(previous)
+            with patch.object(resolver, 'read', read), contextlib.redirect_stdout(io.StringIO()):
+                for failure in (URLError('transport timeout'), HTTPError('fixture', 500, 'temporary', None, None),
+                                json.JSONDecodeError('invalid JSON', '{', 1)):
+                    with self.subTest(failure=failure):
+                        build_response = failure
+                        with self.assertRaises(type(failure)):
+                            resolver.resolve()
+                        self.assertEqual(previous, manifest.read_bytes())
+                        if isinstance(failure, HTTPError):
+                            failure.close()
+
+                missing = object()
+                invalid_refs = {'missing': missing, 'non-string': 42, 'empty': '', 'whitespace': ' ' * 40,
+                                'invalid hex': 'g' * 40, 'short': 'a' * 39}
+                for key in valid_refs:
+                    for case, value in invalid_refs.items():
+                        with self.subTest(ref=key, case=case):
+                            refs = valid_refs.copy()
+                            if value is missing:
+                                del refs[key]
+                            else:
+                                refs[key] = value
+                            build_response = {'refs': refs}
+                            with self.assertRaisesRegex(ValueError, 'Invalid BuildTools metadata for Spigot 1.16.5'):
+                                resolver.resolve()
+                            self.assertEqual(previous, manifest.read_bytes())
+
+                build_response = HTTPError('fixture', 404, 'definitive absence', None, None)
+                resolver.resolve()
+                build_response.close()
+                result = json.loads(manifest.read_text())
+                self.assertFalse(any(row['platform'] == 'spigot' for row in result['entries']))
+                self.assertIn({'platform': 'spigot', 'minecraft': '1.16.5', 'reason': 'No official BuildTools version'},
+                              result['excluded'])
+                build_response = {'refs': valid_refs}
+                resolver.resolve()
+                result = json.loads(manifest.read_text())
+                self.assertEqual(['1.16.5'], [row['minecraft'] for row in result['entries'] if row['platform'] == 'spigot'])
 
     def test_concurrent_verified_downloads_publish_complete_shared_artifacts(self):
         download = module('download_race_test', 'paper/26.3/tools/integration.py').download
@@ -236,6 +262,48 @@ with (out/'invocations').open('a') as calls:calls.write('build\\n')
             server.shutdown()
             server.server_close()
             thread.join(5)
+
+    def test_paper_beta_matrix_selects_only_263_and_rejects_older_explicit_targets(self):
+        matrix = module('paper_beta_selection_test', 'paper/26.3/tools/matrix.py')
+        matrix.TARGETS = {'1.17.1': {'java': 17}, '26.3': {'java': 25}}
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            calls = []
+
+            def execute(command, **_):
+                self.assertIn('--minecraft', command)
+                version = command[command.index('--minecraft') + 1]
+                generation = command[command.index('--plasmo') + 1]
+                calls.append((version, generation))
+                folder = Path(command[command.index('--work-dir') + 1])
+                folder.mkdir(parents=True, exist_ok=True)
+                jar = root / 'paper' / version / f'libs/lazodiscs-paper-1.0.8+{version}.jar'
+                jar.parent.mkdir(parents=True, exist_ok=True)
+                jar.write_bytes(b'disposable candidate')
+                console = folder / 'console.log'
+                console.write_text('disposable server verification output')
+                receipt = dict(failure=None, passed=1, jar_sha256=sha(jar), log=str(console),
+                               console_sha256=sha(console), **{key: 'disposable external identity' for key in
+                               ['fixture_sha256', 'harness_sha256', 'server_sha256', 'voice_sha512', 'config_sha256']})
+                (folder / f'result-{generation}.json').write_text(json.dumps(receipt))
+
+            base = ['paper-matrix', '--test-only', '--output-root', str(root), '--work-root', str(root / 'servers')]
+            with patch.object(matrix, 'java_home', lambda _: '/unused-java'), \
+                    patch.object(matrix.subprocess, 'run', execute), contextlib.redirect_stdout(io.StringIO()):
+                with patch('sys.argv', base + ['--plasmo', 'beta']):
+                    matrix.main()
+                self.assertEqual([('26.3', 'beta')], calls)
+                self.assertEqual(['26.3'], [r['minecraft'] for r in json.loads(
+                    (root / 'verification/native-paper/results-beta.json').read_text())])
+                calls.clear()
+                with patch('sys.argv', base + ['--plasmo', 'beta', '--versions', '1.17.1']), \
+                        contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as refused:
+                    matrix.main()
+                self.assertEqual(2, refused.exception.code)
+                self.assertEqual([], calls, 'Unsupported beta selection must fail before server execution')
+                with patch('sys.argv', base + ['--plasmo', 'stable']):
+                    matrix.main()
+                self.assertCountEqual([('1.17.1', 'stable'), ('26.3', 'stable')], calls)
 
 
 if __name__ == '__main__':

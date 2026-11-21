@@ -6,7 +6,9 @@ import com.eyecrasher.lazodiscs.config.LazoDiscsConfig;
 import com.eyecrasher.lazodiscs.data.CustomDiscData;
 import com.eyecrasher.lazodiscs.data.DiscDataUtil;
 import com.eyecrasher.lazodiscs.paper.JukeboxPlaybackManager;
+import com.eyecrasher.lazodiscs.voice.AudioLoadTask;
 import com.eyecrasher.lazodiscs.voice.LazoDiscsVoiceAddon;
+import com.eyecrasher.lazodiscs.voice.LegacyAudioPacket;
 import com.eyecrasher.lazodiscs.voice.Pv2Transport;
 import com.eyecrasher.lazodiscs.voice.StreamingSession;
 import java.lang.reflect.Field;
@@ -65,8 +67,7 @@ public final class BukkitIntegration extends JavaPlugin {
     private ItemStack held;
     private Player player;
     private Object completedStream;
-    private final java.util.List<com.eyecrasher.lazodiscs.voice.LegacyAudioPacket> legacyReceived = new java.util.ArrayList<>();
-    private final java.util.List<LazoDiscsVoiceAddon.Session> disableSessions = new java.util.ArrayList<>();
+    private final List<LegacyAudioPacket> legacyReceived = new java.util.ArrayList<>();
     private Map<Object,Object> officialLegacyClients;
     private Player legacyListener;
     private final java.util.concurrent.atomic.AtomicReference<Location> legacyPosition = new java.util.concurrent.atomic.AtomicReference<>();
@@ -134,14 +135,12 @@ public final class BukkitIntegration extends JavaPlugin {
         check(!DiscDataUtil.isMusicDisc(new ItemStack(Material.STONE)), "ordinary items rejected");
         try { DiscDataUtil.validateUrl("file:///etc/passwd"); throw new AssertionError("file URL accepted"); }
         catch (IllegalArgumentException expected) { check(true, "local file URLs rejected"); }
-        Block block = location.getBlock();
-        block.setType(Material.JUKEBOX);
-        block.getChunk().addPluginChunkTicket(this);
+        Block block = jukebox(0);
         setupPlayer();
         legacySessionChecks();
         held = new ItemStack(Material.MUSIC_DISC_CAT);
         DiscDataUtil.write(held, disc(audio));
-        var event = interaction();
+        var event = interaction(block);
         manager.checkPermission(event); manager.insert(event);
         check(event.isCancelled() && held.getAmount() == 0, "insertion consumes exactly one disc");
         check(DiscDataUtil.read(((Jukebox) block.getState()).getRecord()).isPresent(), "recording inserted into native jukebox");
@@ -210,24 +209,36 @@ public final class BukkitIntegration extends JavaPlugin {
             case "hashCode" -> id.hashCode();
             case "equals" -> proxy==args[0];
             case "sendPluginMessage" -> {
-                legacyReceived.add(com.eyecrasher.lazodiscs.voice.LegacyAudioPacket.decode((byte[])args[2]));yield null;
+                if (args[0] != plugin || !LegacyAudioPacket.CHANNEL.equals(args[1]) || !plugin.isEnabled()
+                        || !Bukkit.getServer().getMessenger().isOutgoingChannelRegistered(plugin, LegacyAudioPacket.CHANNEL))
+                    throw new AssertionError("Voice1 payload requires an enabled plugin and registered outgoing channel");
+                legacyReceived.add(LegacyAudioPacket.decode((byte[]) args[2]));
+                yield null;
             }
             default -> defaultValue(method.getReturnType());
         });
-        voice.onPluginMessageReceived(com.eyecrasher.lazodiscs.voice.LegacyAudioPacket.CHANNEL,legacyListener,
-                com.eyecrasher.lazodiscs.voice.LegacyAudioPacket.hello().encode());
-        var session=voice.create(location,disc(audio),failure->{});
+        voice.onPluginMessageReceived(LegacyAudioPacket.CHANNEL, legacyListener, LegacyAudioPacket.hello().encode());
+        var source = new Location(world, 0, 64, 0);
+        legacyPosition.set(new Location(world, 64.4, 64.5, 0.5));
+        var session=voice.create(source,disc(audio),failure->{});
         var sink=(StreamingSession.Sink)field(field(session,"stream"),"sink");
         try {
             sink.frame(new byte[]{1},0);
             check(legacyReceived.isEmpty(),"Voice1 HELLO without official session receives no audio");
             addOfficialLegacySession(official);
+            legacyPosition.set(new Location(world, -63.9, 64.5, 0.5));
             sink.frame(new byte[]{2},1);
-            check(legacyReceived.size()==1&&legacyReceived.get(0).kind==2,"Voice1 becomes eligible after its later official connection");
-            officialLegacyClients.remove(legacyListener);sink.frame(new byte[]{3},2);
+            check(legacyReceived.isEmpty(), "Voice1 listener 64.4 blocks from the center receives no frame");
+            legacyPosition.set(new Location(world, 64.4, 64.5, 0.5));
+            sink.frame(new byte[]{3}, 2);
+            check(legacyReceived.size() == 1, "Voice1 listener 63.9 blocks from the center receives a frame after connecting");
+            var frame = legacyReceived.get(0);
+            check(frame.kind == LegacyAudioPacket.FRAME && frame.x == 0.5 && frame.y == 64.5 && frame.z == 0.5 && frame.range == 64,
+                    "Voice1 frame carries the same center and range used for delivery");
+            officialLegacyClients.remove(legacyListener);sink.frame(new byte[]{4},3);
             check(legacyReceived.size()==1,"Voice1 session loss blocks new audio frames");
             addOfficialLegacySession(official);
-            legacyPosition.set(location.clone().add(1000,0,0));sink.frame(new byte[]{4},3);
+            legacyPosition.set(source.clone().add(1000,0,0));sink.frame(new byte[]{5},4);
             sink.finish();session.stop();
             check(legacyReceived.stream().map(packet->packet.kind).toList().equals(List.of(2,4,3)),
                     "Voice1 terminal packets reach a connected listener beyond frame range: " + legacyReceived.stream().map(packet->packet.kind).toList());
@@ -240,33 +251,23 @@ public final class BukkitIntegration extends JavaPlugin {
                 .newInstance(legacyListener,"fabric",java.net.InetAddress.getByName("127.0.0.1"),9);
         officialLegacyClients.put(legacyListener,client);
     }
-    private void prepareDisableListeners() throws Exception {
-        if (officialLegacyClients==null) return;
-        addOfficialLegacySession(Bukkit.getPluginManager().getPlugin("PlasmoVoice").getClass().getClassLoader());
-        legacyReceived.clear();legacyPosition.set(location.clone());
-        for(boolean ended:List.of(false,true)) {
-            var session=voice.create(location,disc(audio),failure->{});disableSessions.add(session);
-            var sink=(StreamingSession.Sink)field(field(session,"stream"),"sink");
-            sink.frame(new byte[]{1},0);if(ended)sink.finish();
-        }
-        check(legacyReceived.stream().filter(packet->packet.kind==2).count()==2,"Voice1 disable observer received both source frames");
+    private Block jukebox(int offsetX) {
+        Block block = location.clone().add(offsetX, 0, 0).getBlock();
+        block.setType(Material.JUKEBOX);
+        block.getChunk().addPluginChunkTicket(this);
+        return block;
     }
-    private void verifyDisableListeners() {
-        if (officialLegacyClients==null) return;
-        check(legacyReceived.stream().filter(packet->packet.kind==3).count()==2,
-                "Voice1 plugin disable delivers STOP for active and END-tail sources before messaging is revoked");
-        disableSessions.forEach(LazoDiscsVoiceAddon.Session::stop);disableSessions.clear();
-        officialLegacyClients.remove(legacyListener);
+    private PlayerInteractEvent interaction(Block block) {
+        return new PlayerInteractEvent(player, Action.RIGHT_CLICK_BLOCK, held, block, BlockFace.UP, EquipmentSlot.HAND);
     }
-    private PlayerInteractEvent interaction() { return new PlayerInteractEvent(player, Action.RIGHT_CLICK_BLOCK, held, location.getBlock(), BlockFace.UP, EquipmentSlot.HAND); }
-    private void insert(String url) {
-        Jukebox jukebox = (Jukebox) location.getBlock().getState();
+    private void insert(Block block, String url) {
+        Jukebox jukebox = (Jukebox) block.getState();
         jukebox.eject();
         manager.validate();
-        check(((Jukebox) location.getBlock().getState()).getRecord().getType().isAir(), "native ejection clears jukebox");
+        check(((Jukebox) block.getState()).getRecord().getType().isAir(), "native ejection clears jukebox");
         held = new ItemStack(Material.MUSIC_DISC_CAT);
         DiscDataUtil.write(held, disc(url));
-        var event = interaction(); manager.checkPermission(event); manager.insert(event);
+        var event = interaction(block); manager.checkPermission(event); manager.insert(event);
     }
     private void cancelLoad() {
         check(((Number) field(completedStream, "sequence")).longValue() >= 145, "HTTP WAV decoded and 150 Opus frames passed to Voice transport");
@@ -275,10 +276,10 @@ public final class BukkitIntegration extends JavaPlugin {
         waitRegion("ejection after EOF still retires the client tail", () -> ((AtomicBoolean) field(completedStream, "manualStop")).get(), 80, this::cancelPendingLoad);
     }
     private void cancelPendingLoad() {
-        insert(audio.replace("test.wav", "held-cancel.wav"));
+        insert(location.getBlock(), audio.replace("test.wav", "held-cancel.wav"));
         waitRegion("cancel request is actually in flight", () -> control("cancel-started"), 80, () -> {
             Object stream = pendingStream();
-            var load = (com.eyecrasher.lazodiscs.voice.AudioLoadTask) field(stream, "load");
+            var load = (AudioLoadTask) field(stream, "load");
             Jukebox jukebox = (Jukebox) location.getBlock().getState(); jukebox.eject();
             manager.validate();
             waitRegion("ejection retires source and loader while HTTP remains held",
@@ -294,8 +295,10 @@ public final class BukkitIntegration extends JavaPlugin {
     private boolean control(String name) { return Files.exists(controls().resolve(name)); }
     private void release(String phase) throws Exception { Files.createFile(controls().resolve(phase + "-release")); }
     private Object pendingStream() {
-        Object entry = ((Map<?,?>) field(manager, "active")).values().iterator().next();
-        return field(field(entry, "session"), "stream");
+        return ((Map<?,?>) field(manager, "active")).values().stream()
+                .map(entry -> field(field(entry, "session"), "stream"))
+                .filter(stream -> !((AudioLoadTask) field(stream, "load")).hasExited())
+                .findFirst().orElseThrow(() -> new AssertionError("No pending loader remains in the jukebox manager"));
     }
     private void unchangedAfterRelease(Object stream, int ticks, Checked next) {
         check(activeCount() == 0 && streamCount() == 0 && field(stream, "playback") == null
@@ -303,26 +306,65 @@ public final class BukkitIntegration extends JavaPlugin {
         if (ticks == 0) guarded(next);
         else scheduler.region(location, () -> guarded(() -> unchangedAfterRelease(stream, ticks - 1, next)));
     }
-    private void shutdownCheck() {
-        insert(audio.replace("test.wav", "held-shutdown.wav"));
+    private void shutdownCheck() throws Exception {
+        if (officialLegacyClients == null) {
+            shutdownWithPendingLoad(location.getBlock(), null, null);
+            return;
+        }
+        addOfficialLegacySession(Bukkit.getPluginManager().getPlugin("PlasmoVoice").getClass().getClassLoader());
+        insert(location.getBlock(), audio);
+        waitRegion("Voice1 jukebox reaches EOF and retires its active stream", () -> activeCount() == 0 && streamCount() == 0
+                && legacyReceived.stream().anyMatch(packet -> packet.kind == LegacyAudioPacket.END), 220, () -> {
+            var frame = legacyReceived.get(0);
+            var end = legacyReceived.get(legacyReceived.size() - 1);
+            check(frame.kind == LegacyAudioPacket.FRAME && frame.opus.length > 0
+                    && end.kind == LegacyAudioPacket.END && end.source.equals(frame.source)
+                    && legacyReceived.stream().noneMatch(packet -> packet.kind == LegacyAudioPacket.STOP),
+                    "Voice1 listener receives decoded audio then END from the same jukebox before disable");
+            shutdownWithActivePlayback(frame.source);
+        });
+    }
+    private void shutdownWithActivePlayback(UUID completed) {
+        int received = legacyReceived.size();
+        insert(jukebox(2), audio);
+        waitRegion("Voice1 listener receives a frame from a second jukebox", () -> legacyReceived.size() > received, 100, () -> {
+            var frame = legacyReceived.get(received);
+            check(frame.kind == LegacyAudioPacket.FRAME && !frame.source.equals(completed)
+                    && activeCount() == 1 && streamCount() == 1, "Voice1 second jukebox is playing before holding another load");
+            shutdownWithPendingLoad(jukebox(1), completed, frame.source);
+        });
+    }
+    private void shutdownWithPendingLoad(Block block, UUID completed, UUID playing) {
+        insert(block, audio.replace("test.wav", "held-shutdown.wav"));
         waitRegion("shutdown request is actually in flight", () -> control("shutdown-started"), 80, () -> {
             Object stream = pendingStream();
-            var load = (com.eyecrasher.lazodiscs.voice.AudioLoadTask) field(stream, "load");
-            scheduler.global(() -> guarded(() -> {
-                prepareDisableListeners();
-                Bukkit.getPluginManager().disablePlugin(plugin);
-                verifyDisableListeners();
-                waitGlobal("disable retires source and loader while HTTP remains held", () -> activeCount() == 0 && streamCount() == 0 && load.hasExited(), 100, () -> {
-                    check(!control("shutdown-release") && !control("shutdown-returned"), "disable precedes HTTP response");
-                    check(((Map<?,?>) field(field(plugin, "commands"), "pending")).isEmpty(), "disable clears pending commands");
-                    var commandMap = (org.bukkit.command.CommandMap) Bukkit.getServer().getClass().getMethod("getCommandMap").invoke(Bukkit.getServer());
-                    check(commandMap.getCommand("lazodiscs:lazodisc") == null, "disable removes command aliases");
-                    release("shutdown");
-                    waitRegion("disabled HTTP response released", () -> control("shutdown-returned"), 100, () ->
-                            unchangedAfterRelease(stream, 20, () -> finish(null)));
-                });
-            }));
+            var load = (AudioLoadTask) field(stream, "load");
+            if (completed != null)
+                check(activeCount() == 2 && streamCount() == 2, "Voice1 playback remains active alongside the held load");
+            disableAndCheck(stream, load, completed, playing);
         });
+    }
+    private void disableAndCheck(Object stream, AudioLoadTask load, UUID completed, UUID playing) {
+        scheduler.global(() -> guarded(() -> {
+            int beforeDisable = legacyReceived.size();
+            Bukkit.getPluginManager().disablePlugin(plugin);
+            if (completed != null) {
+                var stops = legacyReceived.subList(beforeDisable, legacyReceived.size()).stream()
+                        .filter(packet -> packet.kind == LegacyAudioPacket.STOP).map(packet -> packet.source).toList();
+                check(stops.size() == 2 && stops.containsAll(Set.of(completed, playing)),
+                        "Voice1 plugin disable delivers STOP for the active and completed jukebox UUIDs before messaging is revoked");
+                officialLegacyClients.remove(legacyListener);
+            }
+            waitGlobal("disable retires source and loader while HTTP remains held", () -> activeCount() == 0 && streamCount() == 0 && load.hasExited(), 100, () -> {
+                check(!control("shutdown-release") && !control("shutdown-returned"), "disable precedes HTTP response");
+                check(((Map<?,?>) field(field(plugin, "commands"), "pending")).isEmpty(), "disable clears pending commands");
+                var commandMap = (org.bukkit.command.CommandMap) Bukkit.getServer().getClass().getMethod("getCommandMap").invoke(Bukkit.getServer());
+                check(commandMap.getCommand("lazodiscs:lazodisc") == null, "disable removes command aliases");
+                release("shutdown");
+                waitRegion("disabled HTTP response released", () -> control("shutdown-returned"), 100, () ->
+                        unchangedAfterRelease(stream, 20, () -> finish(null)));
+            });
+        }));
     }
     private static Object defaultValue(Class<?> type) {
         if (type == boolean.class) return false;

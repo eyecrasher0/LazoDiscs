@@ -2,6 +2,8 @@
 
 ## 1.0.8
 
+- Require an active official Voice 1 session and measure Bukkit hearing range from the emitted source center; keep cleanup packets for previous listeners. Correct Fabric 1.20.5/1.20.6 resource pack metadata.
+- Isolate HTTP cookies and credentials per recording while preserving signed URLs through query-only and empty redirects. Reject malformed upstream BuildTools refs before refreshing the compatibility matrix.
 - Initialize Voice 1's lazy sound context on the first disc frame and retire audio immediately when the listener changes dimensions. Preserve permitted HLS playlist/segment redirects and redact raw cookie warnings without hiding unrelated errors.
 - Reclaim all consumed Voice 1 OpenAL buffers before resuming an underrun, preventing old audio from being replayed after a client stall.
 - Preserve the last queued Voice 1 frames at natural EOF and let the client finish its PCM queue; extraction still stops immediately. Keep malformed redirect credentials out of logs while retaining named Java module stack frames.

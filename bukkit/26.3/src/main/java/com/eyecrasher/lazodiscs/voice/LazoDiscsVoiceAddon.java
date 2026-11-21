@@ -75,27 +75,28 @@ public final class LazoDiscsVoiceAddon implements Listener, PluginMessageListene
     public boolean hasLoadedAudio() { return loadedAudio; }
     public void markAudioUsed() { loadedAudio = true; }
     public Session create(Location location, CustomDiscData disc, Consumer<String> finished) {
+        Location center = location.clone().add(0.5, 0.5, 0.5);
         StreamingSession.Sink sink;
         if (!legacy) {
             Pv2Transport current = transport;
             if (current == null) throw new IllegalStateException("Plasmo Voice is not ready");
-            sink = current.source(location.getWorld(), location.getX() + .5, location.getY() + .5, location.getZ() + .5, disc.title(), disc.range());
+            sink = current.source(center.getWorld(), center.getX(), center.getY(), center.getZ(), disc.title(), disc.range());
         } else {
             UUID source = UUID.randomUUID();
             var audience = new LegacyAudience();
             sink = new LegacyPacketSender(source, task -> plugin.onLegacyRegion(location, task),
                     (opus, sequence) -> LegacyAudioPacket.frame(source,
-                            com.eyecrasher.lazodiscs.bukkit.Messages.worldKey(location.getWorld()),
-                            location.getX() + .5, location.getY() + .5, location.getZ() + .5,
+                            com.eyecrasher.lazodiscs.bukkit.Messages.worldKey(center.getWorld()),
+                            center.getX(), center.getY(), center.getZ(),
                             disc.range(), sequence, opus),
                     packet -> {
                         var audible = new ArrayList<UUID>();
-                        if (legacyVoice.isEnabled()) {
+                        if (packet.kind == LegacyAudioPacket.FRAME && legacyVoice.isEnabled()) {
                             for (Player player : legacySessions) {
                                 UUID id = player.getUniqueId();
                                 if (!player.isOnline() || !legacyClients.containsKey(id)) continue;
-                                if (packet.kind == LegacyAudioPacket.FRAME && player.getWorld().equals(location.getWorld())
-                                        && player.getLocation().distanceSquared(location) <= (double) disc.range() * disc.range())
+                                if (player.getWorld().equals(center.getWorld())
+                                        && player.getLocation().distanceSquared(center) <= (double) packet.range * packet.range)
                                     audible.add(id);
                             }
                         }

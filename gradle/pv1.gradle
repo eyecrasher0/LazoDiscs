@@ -10,4 +10,6 @@ def pv1Sources = tasks.register('pv1Sources', Sync) {
         }
     }
 }
-sourceSets.main.java.setSrcDirs([pv1Sources, file('../../common/src/main/java')])
+lazoCommonAudio.setExcludes([lazoPv2TransportSource])
+sourceSets.main.java.setSrcDirs([pv1Sources])
+sourceSets.main.java.source(lazoCommonAudio)

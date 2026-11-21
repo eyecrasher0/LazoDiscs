@@ -30,13 +30,20 @@ def java_home(version):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--versions", nargs="+", choices=TARGETS, default=list(TARGETS))
+    parser.add_argument("--versions", nargs="+", choices=TARGETS)
     parser.add_argument("--plasmo", choices=("stable", "beta"), default="stable")
     parser.add_argument("--jobs", type=int, choices=range(1, 5), default=2)
     parser.add_argument("--test-only", action="store_true")
     parser.add_argument("--output-root", type=Path)
     parser.add_argument("--work-root", type=Path)
     args = parser.parse_args()
+    versions = args.versions
+    if args.plasmo == "beta":
+        if versions and any(version != "26.3" for version in versions):
+            parser.error("--plasmo beta supports only Minecraft 26.3")
+        versions = ["26.3"]
+    elif versions is None:
+        versions = list(TARGETS)
     output = args.output_root / "verification/native-paper" if args.output_root else MODULE / "build/matrix"
     output.mkdir(parents=True, exist_ok=True)
     build_env = dict(os.environ, JAVA_HOME=java_home(25))
@@ -79,7 +86,7 @@ def main():
 
     rows = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for row in pool.map(run, args.versions):
+        for row in pool.map(run, versions):
             rows.append(row)
             (output / f"results-{args.plasmo}.json").write_text(json.dumps(rows, indent=2) + "\n")
     if any(row["status"] != "pass" for row in rows):

@@ -80,10 +80,9 @@ final class DirectMediaSource extends HttpAudioSourceManager {
             if (status < 300 || status >= 400 || location == null) return;
             var request = (HttpRequestWrapper) HttpCoreContext.adapt(context).getRequest();
             URI base = ((HttpUriRequest) request.getOriginal()).getURI();
-            String reference = location.getValue();
-            String target = resolve(base, reference).toString();
+            String target = resolve(base, location.getValue()).toString();
             validate.accept(target);
-            if (reference.startsWith("?")) response.setHeader("Location", target);
+            response.setHeader("Location", target);
         }));
     }
 

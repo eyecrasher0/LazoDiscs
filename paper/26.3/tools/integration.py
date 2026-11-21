@@ -116,6 +116,8 @@ def main():
     parser.add_argument("--output-root", type=Path, help="External build-matrix output root")
     parser.add_argument("--plasmo", choices=PV, default="stable")
     args = parser.parse_args()
+    if args.plasmo == "beta" and args.minecraft != "26.3":
+        parser.error("--plasmo beta supports only Minecraft 26.3")
     harness_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     target = TARGETS[args.minecraft]
     cache = (args.work_dir or MODULE / "build" / args.minecraft / "integration").resolve()

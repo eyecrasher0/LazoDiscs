@@ -266,6 +266,9 @@ tasks.register('integrationPlugin', Jar) {
 
 apply from: '../../gradle/audio-errors.gradle'
 
+sourceSets.test.java.source(objects.sourceDirectorySet('legacyVoiceTests', 'Voice 1 test support')
+        .setSrcDirs(lazoCommonAudio.srcDirs)
+        .include(lazoVoice1Sources))
 sourceSets.test.compileClasspath += configurations.compileClasspath
 test {
     useJUnitPlatform()

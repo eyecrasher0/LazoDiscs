@@ -1,6 +1,7 @@
 package com.eyecrasher.lazodiscs.voice;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -18,7 +19,12 @@ class LegacyAudienceTest {
             audience.deliver(LegacyAudioPacket.frame(source,"world",0,0,0,64,i,new byte[]{1}),List.of(current),online::get,send);
         }
         UUID listener=current;
-        audience.deliver(LegacyAudioPacket.end(source),List.of(),online::get,send);
+        var endLookups = new AtomicInteger();
+        audience.deliver(LegacyAudioPacket.end(source), List.of(), id -> {
+            endLookups.incrementAndGet();
+            return online.get(id);
+        }, send);
+        assertEquals(1, endLookups.get(), "END only looks up the listener still connected after churn");
         audience.deliver(LegacyAudioPacket.stop(source),List.of(),online::get,send);
         assertEquals(List.of(2,4,3),received.get(listener));
         assertEquals(1,received.values().stream().filter(kinds->kinds.contains(3)).count());
@@ -38,7 +44,8 @@ class LegacyAudienceTest {
         audience.deliver(LegacyAudioPacket.frame(source,"world",0,0,0,64,1,new byte[]{1}),eligible,online::get,send);
         eligible.clear();
         audience.deliver(LegacyAudioPacket.frame(source,"world",0,0,0,64,2,new byte[]{1}),eligible,online::get,send);
+        audience.deliver(LegacyAudioPacket.end(source),eligible,online::get,send);
         audience.deliver(LegacyAudioPacket.stop(source),eligible,online::get,send);
-        assertEquals(List.of(2,3),received,"Losing Voice eligibility blocks frames while allowing old PCM cleanup");
+        assertEquals(List.of(2,4,3),received,"Losing Voice eligibility blocks frames while allowing old PCM cleanup");
     }
 }

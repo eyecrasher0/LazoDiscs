@@ -2,6 +2,7 @@
 """Pin official Voice releases and exclude platform/version combinations without an upstream build."""
 import json
 import datetime
+import re
 from pathlib import Path
 from urllib.error import HTTPError
 import urllib.request
@@ -40,7 +41,7 @@ def resolve():
                     if error.code!=404:raise
                     excluded.append({'platform':platform,'minecraft':mc,'reason':'No official BuildTools version'});continue
                 refs=build.get('refs') if isinstance(build,dict) else None
-                if not isinstance(refs,dict) or not all(isinstance(refs.get(key),str) and refs[key]
+                if not isinstance(refs,dict) or not all(isinstance(refs.get(key),str) and re.fullmatch(r'[0-9a-fA-F]{40}', refs[key])
                         for key in ('BuildData','Bukkit','CraftBukkit','Spigot')):
                     raise ValueError(f'Invalid BuildTools metadata for Spigot {mc}')
             override=overrides.get(platform+'/'+mc)

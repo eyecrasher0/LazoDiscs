@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       max-parallel: 6
       matrix:
-        plasmo: [stable, beta]
+        plasmo: [stable]
         target:
           - minecraft: "1.17.1"
             java: "17"
@@ -59,18 +59,8 @@ jobs:
             java: "25"
           - minecraft: "26.3"
             java: "25"
-        exclude:
-          - target: {minecraft: "1.17.1", java: "17"}
-            plasmo: beta
-          - target: {minecraft: "1.18.2", java: "17"}
-            plasmo: beta
-          - target: {minecraft: "1.19.2", java: "17"}
-            plasmo: beta
-          - target: {minecraft: "1.19.4", java: "17"}
-            plasmo: beta
-          - target: {minecraft: "1.20.1", java: "17"}
-            plasmo: beta
-          - target: {minecraft: "1.20.4", java: "17"}
+        include:
+          - target: {minecraft: "26.3", java: "25"}
             plasmo: beta
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
