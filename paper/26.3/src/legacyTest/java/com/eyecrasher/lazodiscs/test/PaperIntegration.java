@@ -455,6 +455,9 @@ public final class PaperIntegration extends JavaPlugin {
     }
 
     private void disable() {
+        // Hold this source's chunk until disable. With no real player online,
+        // old servers may unload it while the controlled HTTP load is pending.
+        world.setChunkForceLoaded(3, 3, true);
         put(48, audio.replace("test.wav", "slow.wav?phase=shutdown"));
         waitFor(
                 "disable fixture starts",
@@ -550,7 +553,9 @@ public final class PaperIntegration extends JavaPlugin {
         if (condition.getAsBoolean()) {
             check(true, description);
             guarded(next);
-        } else if (remaining == 0) finish(new AssertionError("Timed out: " + description));
+        } else if (remaining == 0) finish(new AssertionError("Timed out: " + description
+                + "; active=" + activeCount()
+                + "; shutdownRequest=" + Files.isRegularFile(Path.of(System.getProperty("lazodiscs.testShutdownRequest")))));
         else later(1, () -> waitFor(description, condition, remaining - 1, next));
     }
 
