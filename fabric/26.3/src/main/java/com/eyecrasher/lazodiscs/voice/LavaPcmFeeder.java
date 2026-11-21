@@ -61,7 +61,7 @@ public final class LavaPcmFeeder {
 
     private static AudioPlayerManager createPlayerManager(
             AudioDataFormat outputFormat, String label) {
-        DefaultAudioPlayerManager manager = new DefaultAudioPlayerManager();
+        DefaultAudioPlayerManager manager = new CooperativeAudioPlayerManager();
         manager.getConfiguration().setOutputFormat(outputFormat);
         manager.setFrameBufferDuration(500);
         manager.setPlayerCleanupThreshold(30_000L);

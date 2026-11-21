@@ -2,7 +2,7 @@
 
 ## 1.0.8
 
-- Prepare the first decoded frame before exposing cancellable playback, preventing cold-load archive failures on older Forge. Preserve the first frame and report decoding failures that arrive after playback starts.
+- Prepare the first decoded frame before exposing playback and stop decoders cooperatively at buffer boundaries, preventing cancellation from interrupting shared archive reads on older Forge. Preserve the first frame and report decoding failures that arrive after playback starts.
 - Use server-safe position logging on Minecraft 1.16.5 and exclude compile annotations that otherwise cause NeoForge module conflicts.
 - Give archived Voice 2.1.8 ports the same explicit streaming sources, SoundCloud AAC support and Spotify title matching as the other distributions.
 - Use Bukkit's native record-stop operation without sending a play event on modern clients. Scope retired Folia callbacks to the original request and login session.

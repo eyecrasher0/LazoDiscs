@@ -2,7 +2,6 @@ package com.eyecrasher.lazodiscs.voice;
 
 import com.sedmelluq.discord.lavaplayer.format.StandardAudioDataFormats;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
-import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.sedmelluq.discord.lavaplayer.track.BaseAudioTrack;
@@ -46,7 +45,7 @@ class AudioPlaybackPreparationTest {
     }
 
     @Test void waitsForRealFramesAndPreservesTheFirstFrame() throws Exception {
-        var manager = new DefaultAudioPlayerManager();
+        var manager = new CooperativeAudioPlayerManager();
         AudioPlayer player = manager.createPlayer();
         var track = new DelayedTrack(null, false);
         var returned = new CountDownLatch(1);
@@ -68,7 +67,7 @@ class AudioPlaybackPreparationTest {
     }
 
     @Test void interruptedPreparationDisposesOnlyAfterTheDecoderIsReady() throws Exception {
-        var manager = new DefaultAudioPlayerManager();
+        var manager = new CooperativeAudioPlayerManager();
         AudioPlayer player = manager.createPlayer();
         var track = new DelayedTrack(null, false);
         var returned = new CountDownLatch(1);
@@ -93,7 +92,7 @@ class AudioPlaybackPreparationTest {
     }
 
     @Test void earlyDecoderFailureKeepsItsCauseAndDoesNotSendALateNotification() throws Exception {
-        var manager = new DefaultAudioPlayerManager();
+        var manager = new CooperativeAudioPlayerManager();
         AudioPlayer player = manager.createPlayer();
         var error = new FriendlyException("fixture decoder failed", FriendlyException.Severity.COMMON, new IllegalStateException("original cause"));
         var track = new DelayedTrack(error, true);
@@ -110,7 +109,7 @@ class AudioPlaybackPreparationTest {
     }
 
     @Test void decoderFailureAfterPreparationReachesThePlaybackCallback() throws Exception {
-        var manager = new DefaultAudioPlayerManager();
+        var manager = new CooperativeAudioPlayerManager();
         AudioPlayer player = manager.createPlayer();
         var refusal = new FriendlyException("This video requires login.", FriendlyException.Severity.COMMON, null);
         var error = new FriendlyException("late decoder error", FriendlyException.Severity.SUSPICIOUS,

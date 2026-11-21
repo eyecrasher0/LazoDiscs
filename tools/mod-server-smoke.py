@@ -144,7 +144,9 @@ def main():
         while not cold_requested.is_set() and process.poll() is None and time.monotonic()<deadline:
             assert_clean_playback();time.sleep(.05)
         if not cold_requested.is_set():raise RuntimeError(f'Cold audio load never reached the fixture: {log}')
-        send('data remove block 0 80 0 RecordItem')
+        # Old jukebox NBT readers retain their existing item if RecordItem is absent.
+        # An explicit empty compound makes every generation actually clear the slot.
+        send('data modify block 0 80 0 RecordItem set value {}')
         # Allow the server to process removal while the resolver is still held in HTTP.
         time.sleep(.2);cold_cancelled=time.monotonic();cold_release.set()
         deadline=time.monotonic()+30
@@ -163,7 +165,7 @@ def main():
         wait_for_completion(1,first_started)
         cancelled=item.replace('Runtime fixture','Cancelled fixture')
         send('data merge block 0 80 0 {RecordItem:'+cancelled+'}')
-        send('data remove block 0 80 0 RecordItem')
+        send('data modify block 0 80 0 RecordItem set value {}')
         second_started=time.monotonic();send('data merge block 0 80 0 {RecordItem:'+item+'}')
         wait_for_completion(2,second_started)
         send('data get block 0 80 0');time.sleep(1);send('stop')
