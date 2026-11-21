@@ -2,6 +2,7 @@
 
 ## 1.0.8
 
+- Prevent native jukebox songs from starting when a custom disc is inserted on Bukkit and legacy Paper, so the vanilla track cannot overlap or remain after extraction. No extra packet plugin is required.
 - Preserve complete Spotify metadata titles containing `by` or a dash. Use the separate vanilla jukebox stop event on Minecraft 1.19.4–1.20.6 mod ports.
 - Require an active official Voice 1 session and measure Bukkit hearing range from the emitted source center; keep cleanup packets for previous listeners. Correct Fabric 1.20.5/1.20.6 resource pack metadata.
 - Isolate HTTP cookies and credentials per recording while preserving signed URLs through query-only and empty redirects. Reject malformed upstream BuildTools refs before refreshing the compatibility matrix.

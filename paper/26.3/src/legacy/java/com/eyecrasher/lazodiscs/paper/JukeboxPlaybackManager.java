@@ -38,6 +38,8 @@ import org.bukkit.inventory.ItemStack;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 
 /** All world and inventory access in this class runs on the Paper server thread. */
 public final class JukeboxPlaybackManager implements Listener {
@@ -91,7 +93,7 @@ public final class JukeboxPlaybackManager implements Listener {
         ItemStack inserted = held.clone();
         inserted.setAmount(1);
         jukebox.setRecord(inserted);
-        if (!jukebox.update()) return;
+        if (!updateWithoutNativeSong(jukebox)) return;
         // Send the stop in the same tick as insertion, before a client can start the vanilla song.
         stopVanilla(jukebox);
         if (event.getPlayer().getGameMode() != GameMode.CREATIVE) {
@@ -108,6 +110,27 @@ public final class JukeboxPlaybackManager implements Listener {
             plugin.onMain(() -> insertedThisTick.remove(player, key));
         }
         sync(jukebox.getBlock(), true);
+    }
+
+    private static boolean updateWithoutNativeSong(Jukebox jukebox) {
+        try {
+            Class<?> implementation = jukebox.getClass()
+                    .getMethod("update", boolean.class, boolean.class).getDeclaringClass();
+            if (!Jukebox.class.isAssignableFrom(implementation)) return jukebox.update();
+            // CraftJukebox.update emits RECORD_PLAY after storing the snapshot. Its immediate
+            // stop can miss a sound that the client is still loading, leaving an orphan song.
+            // Commit through the block-entity implementation, retaining native item/state
+            // persistence and physics without starting a vanilla song in the first place.
+            var update = MethodHandles.privateLookupIn(implementation, MethodHandles.lookup())
+                    .findSpecial(implementation.getSuperclass(), "update",
+                            MethodType.methodType(boolean.class, boolean.class, boolean.class),
+                            implementation);
+            return (boolean) update.invoke(jukebox, false, true);
+        } catch (RuntimeException | Error failure) {
+            throw failure;
+        } catch (Throwable failure) {
+            throw new IllegalStateException("Cannot store a custom disc without starting its vanilla song", failure);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
