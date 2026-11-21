@@ -9,6 +9,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import org.bukkit.Keyed;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.Jukebox;
 import org.bukkit.entity.Player;
@@ -28,33 +31,37 @@ import org.bukkit.event.Listener;
 /** Suppresses the native start effect while leaving the jukebox and transfer to the server. */
 final class LegacyJukeboxSounds {
     private static final int RECORD_PLAY = 1010;
-    private static final String HANDLER = "lazodiscs_jukebox";
+    private static final NamespacedKey BLOCK_CHANGE = NamespacedKey.minecraft("block_change");
     private final Map<UUID, Client> clients = new ConcurrentHashMap<>();
     private final LevelEvent effect;
+    private final Respawn respawn;
     private volatile boolean closed;
 
     LegacyJukeboxSounds(LazoDiscs plugin, Listener listener, Consumer<Block> changed) {
         LevelEvent resolved = null;
+        Respawn dimension = null;
         ClassLoader server = Jukebox.class.getClassLoader();
         try {
             Class.forName("org.bukkit.inventory.JukeboxInventory", false, server);
             LevelEvent event = new LevelEvent(server);
+            Respawn changeDimension = new Respawn(server);
             Class<? extends Event> eventClass = Class.forName("org.bukkit.event.world.GenericGameEvent", false, server)
                     .asSubclass(Event.class);
             Method gameEvent = eventClass.getMethod("getEvent");
             Method location = eventClass.getMethod("getLocation");
-            Object blockChange = Class.forName("org.bukkit.GameEvent", false, server).getField("BLOCK_CHANGE").get(null);
             // The native jukebox emits BLOCK_CHANGE after storing the item and before playing it.
             // Hopper event optimizations and cancelled sculk notifications do not change this order.
             plugin.getServer().getPluginManager().registerEvent(eventClass, listener, EventPriority.MONITOR, (owner, change) -> {
                 try {
-                    if (!change.isAsynchronous() && gameEvent.invoke(change) == blockChange)
+                    if (!change.isAsynchronous() && gameEvent.invoke(change) instanceof Keyed eventType
+                            && BLOCK_CHANGE.equals(eventType.getKey()))
                         changed.accept(((Location) location.invoke(change)).getBlock());
                 } catch (ReflectiveOperationException failure) {
                     throw new org.bukkit.event.EventException(failure);
                 }
             }, plugin, false);
             resolved = event;
+            dimension = changeDimension;
         } catch (ClassNotFoundException failure) {
             if (!"org.bukkit.inventory.JukeboxInventory".equals(failure.getMessage()))
                 LazoDiscs.LOGGER.warn("Could not bind native jukebox changes", failure);
@@ -62,17 +69,14 @@ final class LegacyJukeboxSounds {
             LazoDiscs.LOGGER.warn("Could not bind native jukebox changes", failure);
         }
         effect = resolved;
+        respawn = dimension;
     }
 
     void track(Player player) {
         if (effect == null || closed) return;
         UUID playerId = player.getUniqueId();
-        UUID world = player.getWorld().getUID();
-        Client existing = clients.get(playerId);
-        if (existing != null) {
-            existing.world = world;
-            return;
-        }
+        if (clients.containsKey(playerId)) return;
+        String world = ((Keyed) player.getWorld()).getKey().toString();
         try {
             Object handle = player.getClass().getMethod("getHandle").invoke(player);
             Object listener = field(handle.getClass(), type -> named(type, "ServerGamePacketListenerImpl", "PlayerConnection")).get(handle);
@@ -86,8 +90,8 @@ final class LegacyJukeboxSounds {
             }
             client.onChannel(() -> {
                 if (clients.get(playerId) != client) return;
-                if (channel.pipeline().get(HANDLER) == null && channel.pipeline().get("packet_handler") != null) {
-                    channel.pipeline().addBefore("packet_handler", HANDLER, client);
+                if (channel.pipeline().get("packet_handler") != null) {
+                    channel.pipeline().addBefore("packet_handler", null, client);
                 } else {
                     clients.remove(playerId, client);
                 }
@@ -97,6 +101,10 @@ final class LegacyJukeboxSounds {
         }
     }
 
+    boolean handlesNativeChanges() {
+        return effect != null;
+    }
+
     void untrack(UUID id) {
         Client client = clients.remove(id);
         if (client != null) client.detach();
@@ -104,14 +112,15 @@ final class LegacyJukeboxSounds {
 
     void close() {
         closed = true;
-        clients.forEach((id, client) -> client.detach());
+        clients.forEach((id, client) -> client.retire());
         clients.clear();
     }
 
     Marker expect(Block block) {
         Marker marker = marker(block);
-        if (marker != null) for (Client client : marker.clients)
-            client.fence(() -> client.pending.put(marker.position, marker));
+        if (marker != null) for (Client client : marker.clients) client.fence(() -> {
+            if (marker.world.equals(client.world)) client.pending.put(marker.position, marker);
+        });
         return marker;
     }
 
@@ -123,14 +132,16 @@ final class LegacyJukeboxSounds {
 
     void forget(Block block) {
         Marker marker = marker(block);
-        if (marker != null) for (Client client : marker.clients)
-            client.fence(() -> client.pending.remove(marker.position));
+        if (marker != null) for (Client client : marker.clients) client.fence(() -> {
+            if (marker.world.equals(client.world)) client.pending.remove(marker.position);
+        });
     }
 
     private Marker marker(Block block) {
         if (clients.isEmpty()) return null;
-        UUID world = block.getWorld().getUID();
-        return new Marker(pack(block), clients.values().stream().filter(client -> client.world.equals(world)).toList());
+        String world = ((Keyed) block.getWorld()).getKey().toString();
+        // A destination's first sound may be queued behind the client's respawn.
+        return new Marker(world, pack(block), List.copyOf(clients.values()));
     }
 
     private static long pack(Block block) {
@@ -154,7 +165,59 @@ final class LegacyJukeboxSounds {
         throw new NoSuchFieldException(type.getName());
     }
 
-    record Marker(long position, List<Client> clients) {}
+    record Marker(String world, long position, List<Client> clients) {}
+
+    /** Read the destination from the respawn packet, including Folia async teleports. */
+    private static final class Respawn {
+        private final Class<?> packet;
+        private final Field spawnInfo;
+        private final Field dimension;
+        private final Method identifier;
+
+        Respawn(ClassLoader server) throws ReflectiveOperationException {
+            packet = gamePacket(server, "ClientboundRespawnPacket", "PacketPlayOutRespawn");
+            Field info = null;
+            for (Field field : packet.getDeclaredFields()) {
+                if (field.getType().getSimpleName().equals("CommonPlayerSpawnInfo")) {
+                    field.setAccessible(true);
+                    info = field;
+                    break;
+                }
+            }
+            spawnInfo = info;
+            dimension = dimensionField(info == null ? packet : info.getType());
+            Method location = null;
+            for (String name : List.of("identifier", "location", "a")) {
+                try { location = dimension.getType().getMethod(name); break; }
+                catch (NoSuchMethodException olderServer) { /* Check the next supported mapping. */ }
+            }
+            if (location == null) throw new NoSuchMethodException("ResourceKey identifier");
+            identifier = location;
+        }
+
+        private static Field dimensionField(Class<?> container) throws NoSuchFieldException {
+            for (Field field : container.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers()) || !field.getType().getSimpleName().equals("ResourceKey")) continue;
+                if (field.getGenericType() instanceof ParameterizedType parameter
+                        && parameter.getActualTypeArguments()[0] instanceof Class<?> target && named(target, "Level", "World")) {
+                    field.setAccessible(true);
+                    return field;
+                }
+            }
+            throw new NoSuchFieldException("Level resource key in " + container.getName());
+        }
+
+        String world(Object respawn) throws ReflectiveOperationException {
+            Object info = spawnInfo == null ? respawn : spawnInfo.get(respawn);
+            return identifier.invoke(dimension.get(info)).toString();
+        }
+    }
+
+    private static Class<?> gamePacket(ClassLoader server, String mojang, String spigot) throws ClassNotFoundException {
+        String prefix = "net.minecraft.network.protocol.game.";
+        try { return Class.forName(prefix + mojang, false, server); }
+        catch (ClassNotFoundException unmapped) { return Class.forName(prefix + spigot, false, server); }
+    }
 
     private static final class LevelEvent {
         private final Class<?> packet;
@@ -165,13 +228,7 @@ final class LegacyJukeboxSounds {
         private final Method packedPosition;
 
         LevelEvent(ClassLoader server) throws ReflectiveOperationException {
-            String prefix = "net.minecraft.network.protocol.game.";
-            Class<?> type;
-            try {
-                type = Class.forName(prefix + "ClientboundLevelEventPacket", false, server);
-            } catch (ClassNotFoundException unmapped) {
-                type = Class.forName(prefix + "PacketPlayOutWorldEvent", false, server);
-            }
+            Class<?> type = gamePacket(server, "ClientboundLevelEventPacket", "PacketPlayOutWorldEvent");
             packet = type;
             position = field(type, value -> named(value, "BlockPos", "BlockPosition"));
             Class<?> pos = position.getType();
@@ -212,9 +269,9 @@ final class LegacyJukeboxSounds {
         private final Method send;
         private final Map<Long, Marker> pending = new HashMap<>();
         private final Map<Object, Runnable> fences = new ConcurrentHashMap<>();
-        private volatile UUID world;
+        private String world;
 
-        Client(Channel channel, Object connection, Method send, UUID world) {
+        Client(Channel channel, Object connection, Method send, String world) {
             this.channel = channel;
             this.connection = connection;
             this.send = send;
@@ -228,7 +285,11 @@ final class LegacyJukeboxSounds {
         }
 
         void fence(Runnable update) {
-            if (closed || !channel.isOpen()) return;
+            if (!closed) queueMarker(update);
+        }
+
+        private boolean queueMarker(Runnable update) {
+            if (!channel.isOpen()) return false;
             Object packet = null;
             try {
                 // Use the same native send queue and packet type as the sound. Anti-Xray
@@ -237,21 +298,38 @@ final class LegacyJukeboxSounds {
                 packet = effect.fence();
                 fences.put(packet, update);
                 send.invoke(connection, packet);
+                return true;
             } catch (ReflectiveOperationException | RuntimeException failure) {
                 if (packet != null) fences.remove(packet);
                 LazoDiscs.LOGGER.warn("Could not queue a jukebox sound marker", failure);
+                return false;
             }
         }
 
+        void retire() {
+            // Roll off this connection after already-queued record starts pass the filter.
+            if (!queueMarker(this::removeFromPipeline)) detach();
+        }
+
         void detach() {
-            onChannel(() -> {
-                if (channel.pipeline().context(this) != null) channel.pipeline().remove(this);
-                pending.clear();
-                fences.clear();
-            });
+            onChannel(this::removeFromPipeline);
+        }
+
+        private void removeFromPipeline() {
+            if (channel.pipeline().context(this) != null) channel.pipeline().remove(this);
+            pending.clear();
+            fences.clear();
         }
 
         @Override public void write(ChannelHandlerContext context, Object packet, ChannelPromise promise) throws Exception {
+            if (respawn.packet == packet.getClass()) {
+                pending.clear();
+                try { world = respawn.world(packet); }
+                catch (ReflectiveOperationException failure) {
+                    world = null;
+                    LazoDiscs.LOGGER.warn("Could not read the client dimension for jukebox sounds", failure);
+                }
+            }
             if (effect.packet == packet.getClass()) {
                 Runnable fence = fences.remove(packet);
                 if (fence != null) {

@@ -27,7 +27,6 @@ import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
-import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -36,6 +35,7 @@ import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.HashMap;
@@ -97,9 +97,16 @@ public final class JukeboxPlaybackManager implements Listener {
         event.setCancelled(true);
         ItemStack inserted = held.clone();
         inserted.setAmount(1);
-        jukebox.setRecord(inserted);
-        if (!updateWithoutNativeSong(jukebox)) return;
-        // Send the stop in the same tick as insertion, before a client can start the vanilla song.
+        if (sounds.handlesNativeChanges()) {
+            // The live inventory fires the same block change as a native hopper move.
+            // Some CraftBukkit snapshots have no level and cannot resolve the song.
+            Inventory inventory = ((InventoryHolder) jukebox).getInventory();
+            inventory.setItem(0, inserted);
+            if (!inserted.isSimilar(inventory.getItem(0))) return;
+        } else {
+            jukebox.setRecord(inserted);
+            if (!updateWithoutNativeSong(jukebox)) return;
+        }
         stopVanilla(jukebox);
         if (event.getPlayer().getGameMode() != GameMode.CREATIVE) {
             ItemStack remaining = held.clone();
@@ -178,8 +185,6 @@ public final class JukeboxPlaybackManager implements Listener {
     }
 
     @EventHandler public void join(PlayerJoinEvent event) { sounds.track(event.getPlayer()); }
-
-    @EventHandler public void changeWorld(PlayerChangedWorldEvent event) { sounds.track(event.getPlayer()); }
 
     @EventHandler public void quit(PlayerQuitEvent event) { sounds.untrack(event.getPlayer().getUniqueId()); }
 
