@@ -132,8 +132,9 @@ public final class LegacyClientAudio {
         final long context;
         final int rate;
         final int[] buffers = new int[8];
+        final int[] available = new int[8];
         ByteBuffer pcm;
-        int allocated;
+        int allocated, availableCount;
         boolean draining;
         long sequence = -1, lastFrame = System.nanoTime();
         Channel(Object source, Object decoder, Object engine, long context, Object capabilities, int rate) {
@@ -147,8 +148,13 @@ public final class LegacyClientAudio {
             int pointer = ((Number) ReflectiveApi.call(source, "getPointer")).intValue();
             int id;
             int processed = (Integer) OpenAl.GET_SOURCE_INT.invoke(null, pointer, OpenAl.BUFFERS_PROCESSED);
-            if (processed > 0) {
-                id = (Integer) OpenAl.UNQUEUE.invoke(null, pointer);
+            // Reclaim every consumed buffer before restarting an underrun source.
+            // OpenAL otherwise replays the old processed entries still in its queue.
+            for (int i = 0; i < processed; i++) {
+                available[availableCount++] = (Integer) OpenAl.UNQUEUE.invoke(null, pointer);
+            }
+            if (availableCount > 0) {
+                id = available[--availableCount];
             } else if (allocated < buffers.length) {
                 id = (Integer) OpenAl.GEN_BUFFER.invoke(null);
                 if (id == 0) throw new IllegalStateException("Could not allocate an OpenAL buffer");

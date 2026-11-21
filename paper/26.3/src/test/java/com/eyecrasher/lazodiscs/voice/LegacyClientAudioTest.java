@@ -89,6 +89,17 @@ class LegacyClientAudioTest {
         assertTrue(AL10.buffers.isEmpty());
         assertTrue(MemoryUtil.LIVE.isEmpty());
     }
+    @Test void resumingAnUnderrunDoesNotReplayPreviouslyConsumedPcm() {
+        UUID id=UUID.randomUUID();
+        for(int i=0;i<8;i++){accept(frame(id,i));engine.flush();}
+        int pointer=engine.sources.get(0).getPointer();
+        assertEquals(8,AL10.alGetSourcei(pointer,0x1015));
+        AL10.processed=true;accept(frame(id,8));engine.flush();
+        assertEquals(1,AL10.alGetSourcei(pointer,0x1015),"Only the new frame may be queued after every old buffer was consumed");
+        assertEquals(8,AL10.allocations,"Processed storage must be reused");
+        accept(LegacyAudioPacket.stop(id));engine.flush();
+        assertTrue(AL10.buffers.isEmpty());assertTrue(MemoryUtil.LIVE.isEmpty());
+    }
     @Test void aStalledNaturalTailStillExpiresAndReleasesItsNativeStorage() throws Exception {
         UUID id=UUID.randomUUID();accept(frame(id,0));accept(LegacyAudioPacket.end(id));engine.flush();
         var channels=LegacyClientAudio.class.getDeclaredField("CHANNELS");channels.setAccessible(true);
