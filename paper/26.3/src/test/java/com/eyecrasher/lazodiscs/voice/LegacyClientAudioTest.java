@@ -58,6 +58,21 @@ class LegacyClientAudioTest {
         assertEquals(32,engine.sources.size());assertEquals(32,OpusDecoder.opened);
         LegacyClientAudio.prune(false);engine.flush();assertEquals(32,OpusDecoder.closed);
     }
+    @Test void naturalEndDrainsQueuedAudioWhileManualStopRemainsImmediate() throws Exception {
+        UUID id=UUID.randomUUID();accept(frame(id,0));accept(frame(id,1));engine.flush();
+        var source=engine.sources.get(0);
+        accept(LegacyAudioPacket.decode(LegacyAudioPacket.end(id).encode()));engine.flush();
+        LegacyClientAudio.prune(true);engine.flush();
+        assertFalse(source.closed,"Natural EOF must preserve the last queued PCM");
+        accept(frame(id,2));engine.flush();assertEquals(2,source.writes);
+        AL10.processed=true;LegacyClientAudio.prune(true);engine.flush();
+        assertTrue(source.closed);assertTrue(MemoryUtil.LIVE.isEmpty());
+        AL10.processed=false;
+        UUID next=UUID.randomUUID();accept(frame(next,0));engine.flush();
+        accept(LegacyAudioPacket.end(next));accept(LegacyAudioPacket.stop(next));engine.flush();
+        assertTrue(engine.sources.get(1).closed,"Extraction must stop queued audio immediately");
+        assertTrue(MemoryUtil.LIVE.isEmpty());
+    }
     @Test void stalledAndPlayingSourcesReuseTheirNativeBuffers() {
         UUID id=UUID.randomUUID();
         for(int i=0;i<100;i++){accept(frame(id,i));engine.flush();}
@@ -73,6 +88,15 @@ class LegacyClientAudioTest {
         assertEquals(8,AL10.deletions);
         assertTrue(AL10.buffers.isEmpty());
         assertTrue(MemoryUtil.LIVE.isEmpty());
+    }
+    @Test void aStalledNaturalTailStillExpiresAndReleasesItsNativeStorage() throws Exception {
+        UUID id=UUID.randomUUID();accept(frame(id,0));accept(LegacyAudioPacket.end(id));engine.flush();
+        var channels=LegacyClientAudio.class.getDeclaredField("CHANNELS");channels.setAccessible(true);
+        Object channel=((java.util.Map<?,?>)channels.get(null)).get(id);
+        var lastFrame=channel.getClass().getDeclaredField("lastFrame");lastFrame.setAccessible(true);
+        lastFrame.setLong(channel,System.nanoTime()-3_000_000_000L);
+        LegacyClientAudio.prune(true);engine.flush();
+        assertTrue(engine.sources.get(0).closed);assertTrue(MemoryUtil.LIVE.isEmpty());assertTrue(AL10.buffers.isEmpty());
     }
     @Test void restartingVoiceSoundContextRecreatesSourcesWithoutDeletingReusedIds() {
         UUID id=UUID.randomUUID();accept(frame(id,0));engine.flush();

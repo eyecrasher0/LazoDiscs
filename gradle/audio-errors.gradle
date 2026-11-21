@@ -1,6 +1,6 @@
 buildscript {
     repositories { mavenCentral() }
-    dependencies { classpath 'org.ow2.asm:asm:9.11' }
+    dependencies { classpath 'org.ow2.asm:asm:9.11.1' }
 }
 
 import java.nio.file.Files

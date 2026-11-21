@@ -32,6 +32,10 @@ public final class LegacyClientAudio {
                         discardInvalidContexts(engine, context, capabilities);
                         if (context == 0) return;
                         Channel channel = CHANNELS.get(packet.source);
+                        if (packet.kind == LegacyAudioPacket.END) {
+                            if (channel != null) channel.draining = true;
+                            return;
+                        }
                         if (packet.kind == LegacyAudioPacket.STOP || !world.equals(packet.world)) {
                             if (channel != null) {
                                 CHANNELS.remove(packet.source);
@@ -58,7 +62,7 @@ public final class LegacyClientAudio {
                             ReflectiveApi.call(source, "setRelative", false);
                             ReflectiveApi.call(source, "setLooping", false);
                         }
-                        if (packet.sequence <= channel.sequence) return;
+                        if (channel.draining || packet.sequence <= channel.sequence) return;
                         channel.sequence = packet.sequence;
                         channel.lastFrame = System.nanoTime();
                         Object config = voice.getMethod("getClientConfig").invoke(null);
@@ -93,7 +97,9 @@ public final class LegacyClientAudio {
                     catch (ReflectiveOperationException error) { failure(error); return; }
                     discardInvalidContexts(engine, context, capabilities);
                     CHANNELS.entrySet().removeIf(entry -> {
-                        if (connected && System.nanoTime() - entry.getValue().lastFrame < 2_000_000_000L) return false;
+                        Channel channel = entry.getValue();
+                        if (connected && System.nanoTime() - channel.lastFrame < 2_000_000_000L
+                                && (!channel.draining || !channel.drained())) return false;
                         entry.getValue().close();
                         return true;
                     });
@@ -128,6 +134,7 @@ public final class LegacyClientAudio {
         final int[] buffers = new int[8];
         ByteBuffer pcm;
         int allocated;
+        boolean draining;
         long sequence = -1, lastFrame = System.nanoTime();
         Channel(Object source, Object decoder, Object engine, long context, Object capabilities, int rate) {
             this.source = source; this.decoder = decoder; this.engine = engine; this.context = context; this.capabilities = capabilities;
@@ -170,6 +177,18 @@ public final class LegacyClientAudio {
             }
         }
 
+        boolean drained() {
+            try {
+                int pointer = ((Number) ReflectiveApi.call(source, "getPointer")).intValue();
+                int queued = (Integer) OpenAl.GET_SOURCE_INT.invoke(null, pointer, OpenAl.BUFFERS_QUEUED);
+                int processed = (Integer) OpenAl.GET_SOURCE_INT.invoke(null, pointer, OpenAl.BUFFERS_PROCESSED);
+                return processed >= queued;
+            } catch (ReflectiveOperationException | RuntimeException error) {
+                failure(error);
+                return true;
+            }
+        }
+
         void close() {
             try {
                 if (allocated > 0) {
@@ -191,6 +210,7 @@ public final class LegacyClientAudio {
         static final int MONO_16 = 0x1101;
         static final int BUFFER = 0x1009;
         static final int BUFFERS_PROCESSED = 0x1016;
+        static final int BUFFERS_QUEUED = 0x1015;
         private static final String AL10 = "org.lwjgl.openal.AL10";
         private static final String MEMORY = "org.lwjgl.system.MemoryUtil";
         static final Method GET_SOURCE_INT = method(AL10, "alGetSourcei", int.class, int.class);

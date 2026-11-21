@@ -455,11 +455,11 @@ public final class PaperIntegration extends JavaPlugin {
     }
 
     private void disable() {
-        put(48, audio.replace("test.wav", "stall.wav"));
+        put(48, audio.replace("test.wav", "slow.wav?phase=shutdown"));
         waitFor(
                 "disable fixture starts",
-                () -> activeCount() == 1,
-                40,
+                () -> activeCount() == 1 && Files.isRegularFile(Path.of(System.getProperty("lazodiscs.testShutdownRequest"))),
+                200,
                 () -> {
                     ServerSourceLine line = (ServerSourceLine) field(voice, "line");
                     Bukkit.getPluginManager().disablePlugin(plugin);
@@ -472,18 +472,13 @@ public final class PaperIntegration extends JavaPlugin {
                     check(
                             ((Map<?, ?>) field(field(plugin, "commands"), "pending")).isEmpty(),
                             "plugin disable clears pending commands");
-                    later(
-                            2,
+                    waitFor(
+                            "plugin disable stops loader workers",
+                            () -> Thread.getAllStackTraces().keySet().stream().noneMatch(
+                                    thread -> thread.isAlive() && thread.getName().startsWith("LazoDiscs-Audio-Loader-")),
+                            200,
                             () -> {
-                                check(
-                                        Thread.getAllStackTraces().keySet().stream()
-                                                .noneMatch(
-                                                        thread ->
-                                                                thread.isAlive()
-                                                                        && thread.getName()
-                                                                                .startsWith(
-                                                                                        "LazoDiscs-Audio-Loader-")),
-                                        "plugin disable stops loader workers");
+                                check(activeCount() == 0 && line.getSources().isEmpty(), "retired loaders cannot recreate a source");
                                 finish(null);
                             });
                 });

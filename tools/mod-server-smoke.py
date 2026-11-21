@@ -119,7 +119,7 @@ def main():
                     output.write(line);output.flush();lines.append(line)
                     if 'Done (' in line and 'For help' in line:ready.set()
                     if f'LazoDiscs smoke retired {cold_disc} from empty jukebox' in line:retired.set()
-                    if '[Server] '+barrier_message in line:barrier.set()
+                    if any(speaker+' '+barrier_message in line for speaker in ('[Server]','<Server>')):barrier.set()
                     finished=re.search(r'LazoDiscs smoke completed (/\w+\.wav) at (\d+) ms',line)
                     if finished:completed.setdefault(finished[1],[]).append(int(finished[2]))
         reader=threading.Thread(target=collect,daemon=True);reader.start()

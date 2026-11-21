@@ -15,7 +15,7 @@ import java.util.logging.Logger;
 
 /** Executes the loggers created by the shipped LavaPlayer and HTTP classes. */
 public final class PackagedLoggingSmoke {
-    private static final String URL_WITH_SECRET = "https://name:password-secret@media.example/path-secret/file.wav?token=query-secret";
+    private static final String URL_WITH_SECRET = "https://o'brien:password-secret@media.example/path-secret/file.wav?token=query-secret";
     private static final List<LogRecord> EVENTS = new ArrayList<>();
 
     public static void main(String[] args) throws Exception {
@@ -60,7 +60,18 @@ public final class PackagedLoggingSmoke {
                 // SLF4J 1.7 hosts expose only the classic logging API exercised above.
             }
             require(original.getMessage().equals("transport detail " + URL_WITH_SECRET), "Original caller exception was modified");
+            String relative = "/path-secret/file.wav?token=query-secret bad";
+            java.net.URISyntaxException syntax = new java.net.URISyntaxException(relative, "Invalid redirect", 5);
+            IllegalArgumentException malformed = new IllegalArgumentException("Invalid redirect: " + relative, syntax);
+            warn.invoke(bundledLogger, "Could not follow " + relative, malformed);
+            require(EVENTS.size() == 1, "Malformed redirect warning was lost");
+            String diagnostic = EVENTS.remove(0).getMessage();
+            require(!diagnostic.contains("path-secret") && !diagnostic.contains("query-secret"), "Malformed relative URL leaked");
+            require(diagnostic.contains("java.net.URISyntaxException: Invalid redirect at index 5"), "URI diagnostic details were lost");
+            require(syntax.getInput().equals(relative), "Original syntax exception was mutated");
             IOException unrelated = new IOException("Unrelated decoder error");
+            unrelated.setStackTrace(new StackTraceElement[]{
+                    new StackTraceElement("LazoDiscs.jar//example.Audio", "read", "Audio.java", 42)});
             warn.invoke(bundledLogger, "No URL here", unrelated);
             require(EVENTS.remove(0).getThrown() == unrelated, "Unrelated Throwable lost its identity");
 

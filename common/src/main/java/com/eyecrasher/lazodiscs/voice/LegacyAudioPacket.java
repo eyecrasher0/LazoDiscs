@@ -10,7 +10,7 @@ import java.util.UUID;
 /** Versioned, bounded custom-payload contract for Voice 1 clients without static-source support. */
 public final class LegacyAudioPacket {
     public static final String CHANNEL = "lazodiscs:legacy";
-    public static final int HELLO = 1, FRAME = 2, STOP = 3;
+    public static final int HELLO = 1, FRAME = 2, STOP = 3, END = 4;
     public final int kind;
     public final UUID source;
     public final String world;
@@ -27,6 +27,7 @@ public final class LegacyAudioPacket {
         return new LegacyAudioPacket(FRAME, id, world, x, y, z, range, sequence, opus.clone());
     }
     public static LegacyAudioPacket stop(UUID id) { return new LegacyAudioPacket(STOP, id, "", 0, 0, 0, 1, 0, new byte[0]); }
+    public static LegacyAudioPacket end(UUID id) { return new LegacyAudioPacket(END, id, "", 0, 0, 0, 1, 0, new byte[0]); }
     public byte[] encode() {
         if (opus.length > 4096 || world.length() > 128 || range < 1 || range > 1024 || !Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) throw new IllegalArgumentException("Invalid audio packet");
         try {
@@ -48,6 +49,7 @@ public final class LegacyAudioPacket {
         if (kind == HELLO) { if (in.available() != 0) throw new IOException("Invalid greeting"); return hello(); }
         UUID id = new UUID(in.readLong(), in.readLong());
         if (kind == STOP) { if (in.available() != 0) throw new IOException("Invalid stop"); return stop(id); }
+        if (kind == END) { if (in.available() != 0) throw new IOException("Invalid end"); return end(id); }
         if (kind != FRAME) throw new IOException("Unknown audio packet");
         String world = in.readUTF(); double x = in.readDouble(), y = in.readDouble(), z = in.readDouble(); int range = in.readUnsignedShort(); long sequence = in.readLong(); int size = in.readUnsignedShort();
         if (size > 4096 || size != in.available() || world.length() > 128 || range < 1 || range > 1024 || !Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)) throw new IOException("Invalid audio frame");

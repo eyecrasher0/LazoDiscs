@@ -16,7 +16,7 @@ import org.slf4j.Marker;
 import org.slf4j.helpers.MessageFormatter;
 
 public final class AudioLogs {
-    private static final Pattern URL = Pattern.compile("(?i)\\b(?:https?|icy)://[^\\s<>\"]+");
+    private static final Pattern URL = Pattern.compile("(?i)(?:\\b[a-z][a-z0-9+.-]*:|(?<![\\w./:]))//[^\\s<>\"]+");
 
     private AudioLogs() {}
 
@@ -51,8 +51,8 @@ public final class AudioLogs {
                         values = java.util.Arrays.copyOfRange(args, offset + 1, args.length);
                     }
                     org.slf4j.helpers.FormattingTuple formatted = MessageFormatter.arrayFormat((String) args[offset], values);
-                    String message = redact(formatted.getMessage());
                     Throwable error = formatted.getThrowable();
+                    String message = redact(formatted.getMessage(), error);
                     if (YoutubeLoginLogFilter.replace(name, error, message)) return null;
                     String stack = redactedStack(error);
                     if (stack != null) {
@@ -78,7 +78,7 @@ public final class AudioLogs {
             @Override public void logMessage(String caller, org.apache.logging.log4j.Level level,
                     org.apache.logging.log4j.Marker marker, org.apache.logging.log4j.message.Message message,
                     Throwable error) {
-                String safe = redact(message == null ? null : message.getFormattedMessage());
+                String safe = redact(message == null ? null : message.getFormattedMessage(), error);
                 if (YoutubeLoginLogFilter.replace(name, error, safe)) return;
                 String stack = redactedStack(error);
                 if (stack != null) {
@@ -109,8 +109,8 @@ public final class AudioLogs {
                     if (args == null || method.getParameterTypes()[0] != Object.class || operation.equals("equals"))
                         return invoke(delegate, method, args);
                     if (httpDetails && ("debug".equals(operation) || "trace".equals(operation))) return null;
-                    String message = redact(String.valueOf(args[0]));
                     Throwable error = args.length == 2 ? (Throwable) args[1] : null;
+                    String message = redact(String.valueOf(args[0]), error);
                     String stack = redactedStack(error);
                     args[0] = stack == null ? message : message + System.lineSeparator() + stack;
                     if (stack != null) args[1] = null;
@@ -134,8 +134,25 @@ public final class AudioLogs {
         }
     }
 
-    static String redact(String text) {
+    static String redact(String text) { return redact(text, null); }
+
+    private static String redact(String text, Throwable error) {
         if (text == null) return null;
+        // URI syntax errors echo their complete input, including malformed relative
+        // redirects with spaces. Scrub that exact input without mutating the cause.
+        java.util.Set<Throwable> seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        java.util.ArrayDeque<Throwable> pending = new java.util.ArrayDeque<>();
+        if (error != null) pending.add(error);
+        while (!pending.isEmpty()) {
+            Throwable cause = pending.removeFirst();
+            if (!seen.add(cause)) continue;
+            if (cause instanceof java.net.URISyntaxException) {
+                String input = ((java.net.URISyntaxException) cause).getInput();
+                if (input != null && !input.isEmpty()) text = text.replace(input, "[media URL omitted]");
+            }
+            if (cause.getCause() != null) pending.add(cause.getCause());
+            java.util.Collections.addAll(pending, cause.getSuppressed());
+        }
         Matcher urls = URL.matcher(text);
         if (!urls.find()) return text;
         StringBuffer safe = new StringBuffer();
@@ -144,7 +161,7 @@ public final class AudioLogs {
             try {
                 URI uri = URI.create(urls.group());
                 if (uri.getHost() != null) {
-                    origin = uri.getScheme() + "://" + uri.getHost()
+                    origin = (uri.getScheme() == null ? "" : uri.getScheme() + ":") + "//" + uri.getHost()
                             + (uri.getPort() < 0 ? "" : ":" + uri.getPort()) + "/…";
                 }
             } catch (IllegalArgumentException invalidUrl) {
@@ -160,7 +177,7 @@ public final class AudioLogs {
         StringWriter rendered = new StringWriter();
         error.printStackTrace(new PrintWriter(rendered));
         String stack = rendered.toString();
-        String safe = redact(stack);
+        String safe = redact(stack, error);
         return safe.equals(stack) ? null : safe;
     }
 

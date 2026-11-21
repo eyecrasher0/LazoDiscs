@@ -110,6 +110,8 @@ class YoutubeLoginFailureTest {
                 assertTrue(events.isEmpty(), "Known sign-in stacks must not reach appenders");
 
                 var unexpected = new IOException("Unexpected decoder/network failure");
+                unexpected.setStackTrace(new StackTraceElement[]{
+                        new StackTraceElement("LazoDiscs.jar",null,null,"example.Audio","read","Audio.java",42)});
                 slf4j.warn("Unexpected audio error", unexpected);
                 assertEquals(1, events.size());
                 assertSame(unexpected, events.get(0).getThrown());
@@ -139,7 +141,7 @@ class YoutubeLoginFailureTest {
 
     @Test void ownedLoggersRedactMediaUrlsWithoutMutatingOriginalErrors() {
         var events = new ArrayList<LogEvent>();
-        String url = "https://user:secret@media.example/private-token/song.wav?token=signed-secret#fragment";
+        String url = "https://o'brien:secret@media.example/private-token/song.wav?token=signed-secret#fragment";
         var original = new IOException("Network failure for " + url, new IllegalStateException("decoder details"));
         var host = (org.apache.logging.log4j.core.Logger) org.apache.logging.log4j.LogManager.getLogger("LazoDiscs.test.urls");
         var previousLevel = host.getLevel();
@@ -196,6 +198,35 @@ class YoutubeLoginFailureTest {
             assertEquals(name, foreign.getClass().getName());
             assertFalse(YoutubeLoginFailure.matches(foreign), "The filter must not hide another plugin's exception");
         }
+    }
+
+    @Test void malformedRelativeRedirectsAreRedactedWithoutChangingTheirCauses() {
+        var events = new ArrayList<LogEvent>();
+        var host = (org.apache.logging.log4j.core.Logger) org.apache.logging.log4j.LogManager.getLogger("LazoDiscs.test.redirects");
+        var level = host.getLevel();
+        boolean additive = host.isAdditive();
+        var appender = new AbstractAppender("redirect-capture", null, PatternLayout.createDefaultLayout(), false) {
+            @Override public void append(LogEvent event) { events.add(event.toImmutable()); }
+        };
+        appender.start();host.addAppender(appender);host.setLevel(Level.ALL);host.setAdditive(false);
+        try {
+            for (String input : List.of("//user:password-secret@media.example/path-secret?token=query-secret bad",
+                    "/path-secret?token=query-secret bad")) {
+                var syntax = new java.net.URISyntaxException(input,"Invalid redirect",5);
+                var original = new IllegalArgumentException("Invalid media redirect: " + input,syntax);
+                AudioLogs.getLogger(host.getName()).warn("Could not follow {}", input,original);
+                AudioLogs.getLog4jLogger(host.getName()).warn("Could not follow " + input,original);
+                assertEquals(input,syntax.getInput());
+                assertEquals("Invalid media redirect: " + input,original.getMessage());
+            }
+            assertEquals(4,events.size());
+            for (var event : events) {
+                String text = event.getMessage().getFormattedMessage();
+                assertFalse(text.contains("password-secret"));assertFalse(text.contains("path-secret"));assertFalse(text.contains("query-secret"));
+                assertTrue(text.contains("java.net.URISyntaxException: Invalid redirect at index 5"));
+                assertTrue(text.contains("YoutubeLoginFailureTest.java:"));assertNull(event.getThrown());
+            }
+        } finally { host.removeAppender(appender);host.setLevel(level);host.setAdditive(additive);appender.stop(); }
     }
 
 }

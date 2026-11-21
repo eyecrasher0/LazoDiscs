@@ -36,6 +36,7 @@ public final class AL10 {
     }
 
     public static int alGetSourcei(int source, int parameter) {
+        if (parameter == 0x1015) return queue(source).size();
         if (parameter != 0x1016) throw new AssertionError("Expected processed-buffer query");
         return processed ? queue(source).size() : 0;
     }

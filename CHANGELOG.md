@@ -2,6 +2,7 @@
 
 ## 1.0.8
 
+- Preserve the last queued Voice 1 frames at natural EOF and let the client finish its PCM queue; extraction still stops immediately. Keep malformed redirect credentials out of logs while retaining named Java module stack frames.
 - Bound and release Voice 1 client PCM storage and OpenAL buffers while keeping the official Voice decoder and engine. Retire sender pools without interrupting cold Forge archive reads.
 - Enforce direct-media URL policy on HTTP probes, redirects, HLS playlists and segments. Keep complete signed links on portable discs while redacting media URLs from owned logs; suppress private HTTP protocol debug output.
 - Apply the current hearing-range cap to stored recordings and stop only the affected jukebox's vanilla song. Reject Spotify candidates whose ordered title does not match.

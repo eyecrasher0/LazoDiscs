@@ -13,6 +13,10 @@ class LegacyAudioPacketTest {
         assertEquals(LegacyAudioPacket.HELLO, LegacyAudioPacket.decode(LegacyAudioPacket.hello().encode()).kind);
         UUID id = UUID.randomUUID();
         assertEquals(id, LegacyAudioPacket.decode(LegacyAudioPacket.stop(id).encode()).source);
+        var end = LegacyAudioPacket.decode(LegacyAudioPacket.end(id).encode());
+        assertEquals(LegacyAudioPacket.END, end.kind);
+        assertEquals(id, end.source);
+        assertThrows(IOException.class, () -> LegacyAudioPacket.decode(Arrays.copyOf(end.encode(), end.encode().length + 1)));
         byte[] opus = new byte[4096]; new Random(1).nextBytes(opus);
         var sent = LegacyAudioPacket.frame(id, "minecraft:overworld", -123.5, 70, 9.25, 1024, 123456, opus);
         var read = LegacyAudioPacket.decode(sent.encode());

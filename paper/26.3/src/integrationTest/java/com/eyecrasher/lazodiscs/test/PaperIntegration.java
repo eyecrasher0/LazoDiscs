@@ -121,29 +121,26 @@ public final class PaperIntegration extends JavaPlugin {
         DiscDataUtil.write(burned, disc(audio));
         comparatorFixture(0, plain);
         comparatorFixture(4, burned);
-        later(
-                6,
+        int expected = VANILLA_SIGNALS.get(type.getKey().getKey());
+        waitFor(
+                "native comparator fixture settles for " + type,
+                () -> wirePower(0) == expected && wirePower(4) == expected,
+                100,
                 () -> {
-                    int original =
-                            ((org.bukkit.block.data.type.RedstoneWire)
-                                            world.getBlockAt(202, 80, 0).getBlockData())
-                                    .getPower();
-                    int custom =
-                            ((org.bukkit.block.data.type.RedstoneWire)
-                                            world.getBlockAt(202, 80, 4).getBlockData())
-                                    .getPower();
-                    check(
-                            original > 0 && original == custom,
-                            "native comparator redstone retained for "
-                                    + type
-                                    + " ("
-                                    + original
-                                    + ")");
+                    check(wirePower(0) == expected && wirePower(4) == expected,
+                            "native comparator redstone retained for " + type + " (" + expected + ")");
                     compareRedstone(index + 1);
                 });
     }
 
+    private int wirePower(int z) {
+        return ((org.bukkit.block.data.type.RedstoneWire) world.getBlockAt(202, 80, z).getBlockData()).getPower();
+    }
+
     private void comparatorFixture(int z, ItemStack item) {
+        // Every case needs new tile entities and an unpowered comparator, not the
+        // previous disc's cached signal or scheduled block ticks.
+        for (int x = 200; x <= 202; x++) world.getBlockAt(x, 80, z).setType(Material.AIR);
         for (int x = 200; x <= 202; x++) world.getBlockAt(x, 79, z).setType(Material.STONE);
         world.getBlockAt(200, 80, z).setType(Material.JUKEBOX);
         world.getBlockAt(201, 80, z).setType(Material.COMPARATOR);
@@ -439,11 +436,11 @@ public final class PaperIntegration extends JavaPlugin {
     }
 
     private void disable() {
-        put(48, audio.replace("test.wav", "stall.wav"));
+        put(48, audio.replace("test.wav", "slow.wav?phase=shutdown"));
         waitFor(
                 "disable fixture starts",
-                () -> activeCount() == 1,
-                40,
+                () -> activeCount() == 1 && Files.isRegularFile(Path.of(System.getProperty("lazodiscs.testShutdownRequest"))),
+                200,
                 () -> {
                     ServerSourceLine line = (ServerSourceLine) field(voice, "line");
                     Bukkit.getPluginManager().disablePlugin(plugin);
@@ -456,18 +453,13 @@ public final class PaperIntegration extends JavaPlugin {
                     check(
                             ((Map<?, ?>) field(field(plugin, "commands"), "pending")).isEmpty(),
                             "plugin disable clears pending commands");
-                    later(
-                            2,
+                    waitFor(
+                            "plugin disable stops loader workers",
+                            () -> Thread.getAllStackTraces().keySet().stream().noneMatch(
+                                    thread -> thread.isAlive() && thread.getName().startsWith("LazoDiscs-Audio-Loader-")),
+                            200,
                             () -> {
-                                check(
-                                        Thread.getAllStackTraces().keySet().stream()
-                                                .noneMatch(
-                                                        thread ->
-                                                                thread.isAlive()
-                                                                        && thread.getName()
-                                                                                .startsWith(
-                                                                                        "LazoDiscs-Audio-Loader-")),
-                                        "plugin disable stops loader workers");
+                                check(activeCount() == 0 && line.getSources().isEmpty(), "retired loaders cannot recreate a source");
                                 finish(null);
                             });
                 });

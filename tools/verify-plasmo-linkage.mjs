@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const readJson = path => JSON.parse(readFileSync(path,'utf8'));
 const outputRoot = process.env.LAZO_OUTPUT_ROOT ?? join(root,'build-matrix');
+const prefix = /^su\/plo\/(?:voice|slib|lib)\//;
 const activeTargets = matrix => matrix.entries.filter(t=>['fabric','forge','neoforge'].includes(t.platform)).map(t=>({
   loader:t.platform,minecraft:t.minecraft,generation:t.voice.generation,
   plasmo_voice:{channel:'release',url:t.voice.url,sha512:t.voice.sha512,version:t.voice.version}

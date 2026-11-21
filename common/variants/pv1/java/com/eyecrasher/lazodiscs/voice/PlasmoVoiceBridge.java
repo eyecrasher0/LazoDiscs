@@ -18,20 +18,18 @@ public final class PlasmoVoiceBridge {
     public PlayingVoiceSource startEntitySource(ServerLevel level, int entityId, Vec3 center, CustomDiscData disc, Runnable finished) {
         UUID source = UUID.randomUUID();
         var position = new java.util.concurrent.atomic.AtomicReference<>(new Position(level, center));
-        var stream = new StreamingSession(new StreamingSession.Sink() {
-            private volatile boolean closed;
-            public void frame(byte[] opus, long sequence) {
-                level.getServer().execute(() -> {
-                    if (closed) return;
+        var stream = new StreamingSession(new LegacyPacketSender(source, task -> level.getServer().execute(task),
+                (opus, sequence) -> {
                     Position current = position.get();
                     var entity = entityId < 0 ? null : current.level.getEntity(entityId);
                     Vec3 at = entity == null ? current.center : entity.position();
-                    byte[] message = LegacyAudioPacket.frame(source, current.level.dimension().location().toString(), at.x, at.y, at.z, disc.range(), sequence, opus).encode();
-                    LegacyNetwork.broadcast(current.level, at, disc.range(), message);
-                });
-            }
-            public void close() { closed = true; level.getServer().execute(() -> LegacyNetwork.broadcast(level, center, disc.range(), LegacyAudioPacket.stop(source).encode())); }
-        }, failure -> level.getServer().execute(() -> {
+                    return LegacyAudioPacket.frame(source, current.level.dimension().location().toString(),
+                            at.x, at.y, at.z, disc.range(), sequence, opus);
+                }, packet -> {
+                    Position current = position.get();
+                    Vec3 at = packet.kind == LegacyAudioPacket.FRAME ? new Vec3(packet.x, packet.y, packet.z) : current.center;
+                    LegacyNetwork.broadcast(current.level, at, disc.range(), packet.encode());
+                }), failure -> level.getServer().execute(() -> {
             if (failure != null) {
                 LazoDiscs.LOGGER.warn("Could not play '{}': {}", disc.title(), failure);
                 for (var player : level.players()) if (player.position().distanceToSqr(center) <= (double) disc.range() * disc.range())

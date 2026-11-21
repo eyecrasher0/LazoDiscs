@@ -57,8 +57,12 @@ def wav_fixture():
 
 class AudioFixture(http.server.BaseHTTPRequestHandler):
     audio = wav_fixture()
+    shutdown_request = None
 
     def do_GET(self):
+        if self.path == "/slow.wav?phase=shutdown" and self.shutdown_request is not None:
+            self.shutdown_request.touch()
+        self.path = self.path.split("?", 1)[0]
         if self.path == "/missing.wav":
             # Keep the loading state observable even when a local 404 is extremely fast.
             time.sleep(0.5)
@@ -127,12 +131,13 @@ def main():
     config = (MODULE / "src/main/resources/config.yml").read_text().replace("allowHttp: false", "allowHttp: true")
     (plugins / "LazoDiscs/config.yml").write_text(config)
     (plugins / "PlasmoVoice/config.toml").write_text('[host]\nip = "127.0.0.1"\nport = 0\n')
+    AudioFixture.shutdown_request = run / "shutdown-requested"
     http_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), AudioFixture)
     threading.Thread(target=http_server.serve_forever, daemon=True).start()
     result = run / "result.json"
     command = [args.java, "-Xms512M", "-Xmx1536M", "-Dterminal.jline=false", "-Dterminal.ansi=false",
                f"-Dlazodiscs.testAudioUrl=http://127.0.0.1:{http_server.server_port}/test.wav",
-               f"-Dlazodiscs.testResult={result}", "-jar", "paper.jar", "--nogui"]
+               f"-Dlazodiscs.testResult={result}", f"-Dlazodiscs.testShutdownRequest={AudioFixture.shutdown_request}", "-jar", "paper.jar", "--nogui"]
     print(f"Running Paper {args.minecraft} + Plasmo {args.plasmo}; log: {run / 'console.log'}", flush=True)
     try:
         with (run / "console.log").open("w") as log:

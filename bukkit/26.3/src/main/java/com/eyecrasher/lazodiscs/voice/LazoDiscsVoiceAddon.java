@@ -65,22 +65,18 @@ public final class LazoDiscsVoiceAddon implements Listener, PluginMessageListene
             sink = current.source(location.getWorld(), location.getX() + .5, location.getY() + .5, location.getZ() + .5, disc.title(), disc.range());
         } else {
             UUID source = UUID.randomUUID();
-            sink = new StreamingSession.Sink() {
-                private volatile boolean closed;
-                private void send(byte[] bytes, boolean frame) {
-                    plugin.onRegion(location, () -> {
-                        if (frame && closed) return;
+            sink = new LegacyPacketSender(source, task -> plugin.onRegion(location, task),
+                    (opus, sequence) -> LegacyAudioPacket.frame(source,
+                            com.eyecrasher.lazodiscs.bukkit.Messages.worldKey(location.getWorld()),
+                            location.getX() + .5, location.getY() + .5, location.getZ() + .5,
+                            disc.range(), sequence, opus),
+                    packet -> {
                         for (Player player : location.getWorld().getPlayers()) {
                             if (!legacyClients.contains(player.getUniqueId())) continue;
-                            if (!frame || player.getLocation().distanceSquared(location) <= (double) disc.range() * disc.range()) player.sendPluginMessage(plugin, LegacyAudioPacket.CHANNEL, bytes);
+                            if (packet.kind != LegacyAudioPacket.FRAME || player.getLocation().distanceSquared(location) <= (double) disc.range() * disc.range())
+                                player.sendPluginMessage(plugin, LegacyAudioPacket.CHANNEL, packet.encode());
                         }
                     });
-                }
-                public void frame(byte[] opus, long sequence) {
-                    send(LegacyAudioPacket.frame(source, com.eyecrasher.lazodiscs.bukkit.Messages.worldKey(location.getWorld()), location.getX() + .5, location.getY() + .5, location.getZ() + .5, disc.range(), sequence, opus).encode(), true);
-                }
-                public void close() { closed = true; send(LegacyAudioPacket.stop(source).encode(), false); }
-            };
         }
         StreamingSession stream = new StreamingSession(sink, failure -> plugin.onRegion(location, () -> finished.accept(failure)));
         return new Session(stream, disc);

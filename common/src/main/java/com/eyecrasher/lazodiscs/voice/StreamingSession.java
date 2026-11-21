@@ -21,6 +21,7 @@ import java.util.function.Consumer;
 public final class StreamingSession implements AutoCloseable {
     public interface Sink extends AutoCloseable {
         void frame(byte[] opus, long sequence) throws Exception;
+        default void finish() { close(); }
         void close();
     }
     private static final Set<StreamingSession> ACTIVE = ConcurrentHashMap.newKeySet();
@@ -107,7 +108,10 @@ public final class StreamingSession implements AutoCloseable {
             if (sender != null) sender.cancel(false);
             try { if (playback != null) playback.close(); }
             catch (RuntimeException | LinkageError error) { LazoDiscs.LOGGER.warn("Could not close audio decoder", error); }
-            try { sink.close(); }
+            try {
+                if (!manual && failure == null && sequence > 0) sink.finish();
+                else sink.close();
+            }
             catch (RuntimeException | LinkageError error) { LazoDiscs.LOGGER.warn("Could not remove audio source", error); }
         }
         if (!manual) finished.accept(failure);
