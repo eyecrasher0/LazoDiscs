@@ -2,10 +2,16 @@ package com.eyecrasher.lazodiscs.voice;
 
 import com.sedmelluq.discord.lavaplayer.format.StandardAudioDataFormats;
 import com.sedmelluq.discord.lavaplayer.player.AudioLoadResultHandler;
+import com.sedmelluq.discord.lavaplayer.player.AudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
+import com.sedmelluq.discord.lavaplayer.source.AudioSourceManager;
+import com.sedmelluq.discord.lavaplayer.source.http.HttpAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
+import com.sedmelluq.discord.lavaplayer.track.AudioItem;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
+import com.sedmelluq.discord.lavaplayer.track.AudioReference;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import com.sedmelluq.discord.lavaplayer.track.BasicAudioPlaylist;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -42,8 +48,9 @@ class DirectMediaSourceTest {
             this(uri -> {});
         }
 
-        Fixture(Consumer<URI> policy) throws Exception {
+        Fixture(Consumer<URI> policy, AudioSourceManager... services) throws Exception {
             manager.getConfiguration().setOutputFormat(StandardAudioDataFormats.DISCORD_PCM_S16_LE);
+            manager.registerSourceManagers(services);
             manager.registerSourceManager(new DirectMediaSource(url -> {
                 URI uri = URI.create(url);
                 if (!"127.0.0.1".equals(uri.getHost())) {
@@ -345,6 +352,36 @@ class DirectMediaSourceTest {
                 assertNotNull(player.provide(), "The same recording must retain its cookie on direct replay");
                 assertTrue(hits.get() >= 3);
             } finally { player.destroy(); }
+        }
+    }
+
+    @Test void validatedHttpAndM3uRedirectsReturnToTheRegisteredService() throws Exception {
+        var service = new BasicAudioPlaylist("service fixture", List.of(), null, false);
+        var visits = new ConcurrentLinkedQueue<String>();
+        var endpoints = new HttpAudioSourceManager() {
+            @Override public AudioItem loadItem(AudioPlayerManager manager, AudioReference reference) {
+                if (!URI.create(reference.identifier).getPath().startsWith("/service/")) return null;
+                visits.add(reference.identifier);
+                return service;
+            }
+        };
+        try (var fixture = new Fixture(uri -> {
+            if (uri.getPath().equals("/service/denied")) throw new IllegalArgumentException("Denied by test policy");
+        }, endpoints)) {
+            String target = fixture.allowed("/service/track?signature=exact%2B%2f");
+            fixture.http.createContext("/service-redirect.wav", exchange -> {
+                try (exchange) { redirect(exchange, target); }
+            });
+            fixture.http.createContext("/service-list.m3u", exchange -> {
+                try (exchange) { respond(exchange, "audio/x-mpegurl", ("#EXTM3U\n" + target + "\n").getBytes(StandardCharsets.UTF_8)); }
+            });
+            fixture.http.createContext("/blocked-service.wav", exchange -> {
+                try (exchange) { redirect(exchange, fixture.allowed("/service/denied")); }
+            });
+            assertSame(service, fixture.manager.loadItemSync(fixture.allowed("/service-redirect.wav")));
+            assertSame(service, fixture.manager.loadItemSync(fixture.allowed("/service-list.m3u")));
+            assertThrows(IllegalArgumentException.class, () -> fixture.manager.loadItemSync(fixture.allowed("/blocked-service.wav")));
+            assertEquals(List.of(target, target), List.copyOf(visits));
         }
     }
 

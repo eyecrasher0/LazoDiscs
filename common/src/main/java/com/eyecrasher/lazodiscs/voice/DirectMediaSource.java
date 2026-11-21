@@ -134,10 +134,10 @@ final class DirectMediaSource extends HttpAudioSourceManager {
         RecordingAccess previous = recording.get();
         recording.set(new RecordingAccess());
         try {
-            // Follow references inside this load so redirects keep this recording's cookies.
+            // Re-enter source selection without creating a new recording for direct HTTP hops.
             for (int redirects = 0; redirects < 10; redirects++) {
                 validate(http);
-                AudioItem result = super.loadItem(manager, http);
+                AudioItem result = redirects == 0 ? super.loadItem(manager, http) : loadRedirect(manager, http);
                 if (!(result instanceof AudioReference) || ((AudioReference) result).identifier == null) return result;
                 http = getAsHttpReference((AudioReference) result);
                 if (http == null) throw new FriendlyException(
@@ -147,6 +147,14 @@ final class DirectMediaSource extends HttpAudioSourceManager {
         } finally {
             if (previous == null) recording.remove(); else recording.set(previous);
         }
+    }
+
+    private AudioItem loadRedirect(AudioPlayerManager manager, AudioReference reference) {
+        for (var source : manager.getSourceManagers()) {
+            AudioItem result = source == this ? super.loadItem(manager, reference) : source.loadItem(manager, reference);
+            if (result != null) return result;
+        }
+        return null;
     }
 
     private void validate(AudioReference reference) {

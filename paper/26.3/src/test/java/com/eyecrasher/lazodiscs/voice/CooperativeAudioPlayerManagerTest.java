@@ -4,12 +4,17 @@ import com.sedmelluq.discord.lavaplayer.format.StandardAudioDataFormats;
 import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackInfo;
 import com.sedmelluq.discord.lavaplayer.track.BaseAudioTrack;
+import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
 import com.sedmelluq.discord.lavaplayer.track.playback.ImmutableAudioFrame;
 import com.sedmelluq.discord.lavaplayer.track.playback.LocalAudioTrackExecutor;
+import com.sedmelluq.discord.lavaplayer.track.playback.MutableAudioFrame;
+import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -132,6 +137,55 @@ class CooperativeAudioPlayerManagerTest {
             assertTrue(track.ended.await(5, TimeUnit.SECONDS));
             assertNull(fixture.player.getPlayingTrack());
             assertEquals(0, fixture.externalInterrupts.get());
+        }
+    }
+
+    @Test void timedReadersReceiveFramesAndEofWhenPublished() throws Exception {
+        timedRead(false, true);
+        timedRead(true, true);
+        timedRead(false, false);
+        timedRead(true, false);
+    }
+
+    private static void timedRead(boolean mutable, boolean writeFrame) throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        Track track = new Track() {
+            @Override public void process(LocalAudioTrackExecutor executor) throws Exception {
+                entered.countDown();
+                release.await();
+                if (writeFrame) frame(executor);
+                executor.waitOnEnd();
+            }
+        };
+        try (Fixture fixture = new Fixture()) {
+            try {
+                fixture.player.playTrack(track);
+                assertTrue(track.entered.await(5, TimeUnit.SECONDS));
+                var read = new FutureTask<AudioFrame>(() -> {
+                    if (!mutable) return fixture.player.provide(30, TimeUnit.SECONDS);
+                    var frame = new MutableAudioFrame();
+                    frame.setBuffer(ByteBuffer.allocate(128));
+                    return fixture.player.provide(frame, 30, TimeUnit.SECONDS) ? frame : null;
+                });
+                var reader = new Thread(read, "test-timed-reader");
+                reader.setDaemon(true);
+                reader.start();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+                while (reader.getState() != Thread.State.TIMED_WAITING && System.nanoTime() < deadline)
+                    LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1));
+                assertEquals(Thread.State.TIMED_WAITING, reader.getState());
+                release.countDown();
+                AudioFrame frame = read.get(3, TimeUnit.SECONDS);
+                if (writeFrame) {
+                    assertNotNull(frame);
+                    assertArrayEquals(new byte[]{3, 7, 11}, frame.getData());
+                } else {
+                    assertNull(frame);
+                    assertNull(fixture.player.getPlayingTrack());
+                }
+            } finally {
+                release.countDown();
+            }
         }
     }
 }

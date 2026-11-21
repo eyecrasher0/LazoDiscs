@@ -252,6 +252,10 @@ public final class JukeboxPlaybackManager implements Listener {
         active.clear();
     }
 
+    public void close() {
+        stopAll();
+    }
+
     private static final class Entry {
         private final CustomDiscData disc;
         private LazoDiscsVoiceAddon.Session session;

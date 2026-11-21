@@ -17,16 +17,6 @@ public final class Messages {
     public static void send(CommandSender target, Component message) {
         target.spigot().sendMessage(net.md_5.bungee.chat.ComponentSerializer.parse(CHAT.serialize(message)));
     }
-    public static String worldKey(org.bukkit.World world) {
-        try { return world.getClass().getMethod("getKey").invoke(world).toString(); }
-        catch (ReflectiveOperationException oldApi) {
-            return switch (world.getEnvironment()) {
-                case NETHER -> "minecraft:the_nether";
-                case THE_END -> "minecraft:the_end";
-                default -> "minecraft:overworld";
-            };
-        }
-    }
     public static Component displayName(ItemMeta meta) {
         return meta.hasDisplayName() ? LegacyComponentSerializer.legacySection().deserialize(meta.getDisplayName()) : null;
     }

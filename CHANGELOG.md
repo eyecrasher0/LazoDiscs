@@ -2,10 +2,11 @@
 
 ## 1.0.8
 
-- Prevent native jukebox songs from starting when a custom disc is inserted on Bukkit and legacy Paper, so the vanilla track cannot overlap or remain after extraction. No extra packet plugin is required.
+- Suppress the vanilla song of a recorded disc when a player, hopper or dropper inserts it into a jukebox on Bukkit and legacy Paper. Hoppers and droppers use Minecraft's native item transfer.
 - Preserve complete Spotify metadata titles containing `by` or a dash. Use the separate vanilla jukebox stop event on Minecraft 1.19.4–1.20.6 mod ports.
 - Require an active official Voice 1 session and measure Bukkit hearing range from the emitted source center; keep cleanup packets for previous listeners. Correct Fabric 1.20.5/1.20.6 resource pack metadata.
 - Isolate HTTP cookies and credentials per recording while preserving signed URLs through query-only and empty redirects. Reject malformed upstream BuildTools refs before refreshing the compatibility matrix.
+- Return validated HTTP and M3U redirects to the registered streaming sources. Wake timed audio readers when frames or the end of the track arrive, and use the actual dimension key for Voice 1 on old Spigot.
 - Initialize Voice 1's lazy sound context on the first disc frame and retire audio immediately when the listener changes dimensions. Preserve permitted HLS playlist/segment redirects and redact raw cookie warnings without hiding unrelated errors.
 - Reclaim all consumed Voice 1 OpenAL buffers before resuming an underrun, preventing old audio from being replayed after a client stall.
 - Preserve the last queued Voice 1 frames at natural EOF and let the client finish its PCM queue; extraction still stops immediately. Keep malformed redirect credentials out of logs while retaining named Java module stack frames.

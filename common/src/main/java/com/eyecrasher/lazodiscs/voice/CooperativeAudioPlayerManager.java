@@ -11,7 +11,6 @@ import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrame;
 import com.sedmelluq.discord.lavaplayer.track.playback.AudioFrameRebuilder;
 import com.sedmelluq.discord.lavaplayer.track.playback.AudioTrackExecutor;
 import com.sedmelluq.discord.lavaplayer.track.playback.LocalAudioTrackExecutor;
-import com.sedmelluq.discord.lavaplayer.track.playback.MutableAudioFrame;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -80,6 +79,14 @@ public final class CooperativeAudioPlayerManager extends DefaultAudioPlayerManag
                 while (!stopping.get() && getRemainingCapacity() == 0 && !hasClearOnInsert()) synchronizer.wait();
                 if (stopping.get()) throw new InterruptedException("Audio playback was stopped");
                 super.consume(frame);
+                synchronizer.notifyAll();
+            }
+        }
+
+        @Override public void setTerminateOnEmpty() {
+            synchronized (synchronizer) {
+                super.setTerminateOnEmpty();
+                synchronizer.notifyAll();
             }
         }
 
@@ -93,7 +100,7 @@ public final class CooperativeAudioPlayerManager extends DefaultAudioPlayerManag
         @Override public AudioFrame provide() {
             synchronized (synchronizer) {
                 AudioFrame frame = super.provide();
-                synchronizer.notifyAll();
+                if (frame != null) synchronizer.notifyAll();
                 return frame;
             }
         }
@@ -110,20 +117,6 @@ public final class CooperativeAudioPlayerManager extends DefaultAudioPlayerManag
                 }
                 return frame;
             }
-        }
-
-        @Override public boolean provide(MutableAudioFrame target) {
-            synchronized (synchronizer) {
-                boolean provided = super.provide(target);
-                synchronizer.notifyAll();
-                return provided;
-            }
-        }
-
-        @Override public boolean provide(MutableAudioFrame target, long timeout, TimeUnit unit)
-                throws TimeoutException, InterruptedException {
-            // AllocatingAudioFrameBuffer bridges this call through our timed provide.
-            synchronized (synchronizer) { return super.provide(target, timeout, unit); }
         }
 
         @Override public void clear() {

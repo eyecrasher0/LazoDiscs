@@ -9,7 +9,6 @@ import com.eyecrasher.lazodiscs.paper.JukeboxPlaybackManager;
 import com.eyecrasher.lazodiscs.voice.AudioLoadTask;
 import com.eyecrasher.lazodiscs.voice.LazoDiscsVoiceAddon;
 import com.eyecrasher.lazodiscs.voice.LegacyAudioPacket;
-import com.eyecrasher.lazodiscs.voice.Pv2Transport;
 import com.eyecrasher.lazodiscs.voice.StreamingSession;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
@@ -27,6 +26,8 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.WorldCreator;
+import org.bukkit.WorldType;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Jukebox;
@@ -124,14 +125,6 @@ public final class BukkitIntegration extends JavaPlugin {
         }
         persistedPolicy();
         check(discs >= 13, "all discs in this server version covered: " + discs);
-        if (field(voice, "transport") instanceof Pv2Transport transport) {
-            var entity = world.spawnEntity(location.clone().add(2,0,0), org.bukkit.entity.EntityType.ARMOR_STAND);
-            try {
-                var source = transport.entitySource(entity, "Moving fixture", 64);
-                source.close();
-                check(true, "Voice creates and releases native entity sources");
-            } finally { entity.remove(); }
-        }
         check(!DiscDataUtil.isMusicDisc(new ItemStack(Material.STONE)), "ordinary items rejected");
         try { DiscDataUtil.validateUrl("file:///etc/passwd"); throw new AssertionError("file URL accepted"); }
         catch (IllegalArgumentException expected) { check(true, "local file URLs rejected"); }
@@ -196,6 +189,8 @@ public final class BukkitIntegration extends JavaPlugin {
     @SuppressWarnings("unchecked")
     private void legacySessionChecks() throws Exception {
         if (!(Boolean) field(voice, "legacy")) return;
+        World dimension = Bukkit.createWorld(new WorldCreator("lazo_voice_dimension").type(WorldType.FLAT).generateStructures(false));
+        check(dimension != null, "additional Voice 1 test dimension loads");
         var official = Bukkit.getPluginManager().getPlugin("PlasmoVoice").getClass().getClassLoader();
         var socket = Class.forName("su.plo.voice.socket.SocketServerUDP", true, official);
         officialLegacyClients = (Map<Object,Object>) socket.getField("clients").get(null);
@@ -203,7 +198,7 @@ public final class BukkitIntegration extends JavaPlugin {
         legacyListener=(Player)Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{Player.class},(proxy,method,args)-> switch(method.getName()) {
             case "getUniqueId" -> id;
             case "isOnline" -> true;
-            case "getWorld" -> world;
+            case "getWorld" -> legacyPosition.get().getWorld();
             case "getLocation" -> legacyPosition.get();
             case "getName" -> "LazoDiscsVoiceBoundaryFixture";
             case "hashCode" -> id.hashCode();
@@ -218,23 +213,24 @@ public final class BukkitIntegration extends JavaPlugin {
             default -> defaultValue(method.getReturnType());
         });
         voice.onPluginMessageReceived(LegacyAudioPacket.CHANNEL, legacyListener, LegacyAudioPacket.hello().encode());
-        var source = new Location(world, 0, 64, 0);
-        legacyPosition.set(new Location(world, 64.4, 64.5, 0.5));
+        var source = new Location(dimension, 0, 64, 0);
+        legacyPosition.set(new Location(dimension, 64.4, 64.5, 0.5));
         var session=voice.create(source,disc(audio),failure->{});
         var sink=(StreamingSession.Sink)field(field(session,"stream"),"sink");
         try {
             sink.frame(new byte[]{1},0);
             check(legacyReceived.isEmpty(),"Voice1 HELLO without official session receives no audio");
             addOfficialLegacySession(official);
-            legacyPosition.set(new Location(world, -63.9, 64.5, 0.5));
+            legacyPosition.set(new Location(dimension, -63.9, 64.5, 0.5));
             sink.frame(new byte[]{2},1);
             check(legacyReceived.isEmpty(), "Voice1 listener 64.4 blocks from the center receives no frame");
-            legacyPosition.set(new Location(world, 64.4, 64.5, 0.5));
+            legacyPosition.set(new Location(dimension, 64.4, 64.5, 0.5));
             sink.frame(new byte[]{3}, 2);
             check(legacyReceived.size() == 1, "Voice1 listener 63.9 blocks from the center receives a frame after connecting");
             var frame = legacyReceived.get(0);
             check(frame.kind == LegacyAudioPacket.FRAME && frame.x == 0.5 && frame.y == 64.5 && frame.z == 0.5 && frame.range == 64,
                     "Voice1 frame carries the same center and range used for delivery");
+            check(frame.world.equals("minecraft:lazo_voice_dimension"), "Voice1 frame names the native custom dimension: " + frame.world);
             officialLegacyClients.remove(legacyListener);sink.frame(new byte[]{4},3);
             check(legacyReceived.size()==1,"Voice1 session loss blocks new audio frames");
             addOfficialLegacySession(official);
@@ -242,7 +238,13 @@ public final class BukkitIntegration extends JavaPlugin {
             sink.finish();session.stop();
             check(legacyReceived.stream().map(packet->packet.kind).toList().equals(List.of(2,4,3)),
                     "Voice1 terminal packets reach a connected listener beyond frame range: " + legacyReceived.stream().map(packet->packet.kind).toList());
-        } finally {session.stop();officialLegacyClients.remove(legacyListener);legacyPosition.set(location.clone());legacyReceived.clear();}
+        } finally {
+            session.stop();
+            officialLegacyClients.remove(legacyListener);
+            legacyPosition.set(location.clone());
+            legacyReceived.clear();
+            Bukkit.unloadWorld(dimension, false);
+        }
     }
     private void addOfficialLegacySession(ClassLoader official) throws Exception {
         // Controlled state in the real official session registry. No UDP/hearing claim.

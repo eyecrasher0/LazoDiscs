@@ -27,7 +27,10 @@ import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
@@ -48,6 +51,7 @@ public final class JukeboxPlaybackManager implements Listener {
     private final Map<Key, Entry> active = new HashMap<>();
     private final Map<Key, Entry> completed = new HashMap<>();
     private final Map<UUID, Key> insertedThisTick = new HashMap<>();
+    private final LegacyJukeboxSounds sounds = new LegacyJukeboxSounds();
 
     public JukeboxPlaybackManager(LazoDiscs plugin, LazoDiscsVoiceAddon voice) {
         this.plugin = plugin;
@@ -138,8 +142,11 @@ public final class JukeboxPlaybackManager implements Listener {
         if (event.getAction() == Action.RIGHT_CLICK_BLOCK
                 && event.getClickedBlock() != null
                 && event.getClickedBlock().getType() == Material.JUKEBOX
-                && event.useInteractedBlock() != Event.Result.DENY)
-            scheduleSync(event.getClickedBlock());
+                && event.useInteractedBlock() != Event.Result.DENY) {
+            Block block = event.getClickedBlock();
+            sounds.forget(block);
+            scheduleSync(block);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -151,12 +158,24 @@ public final class JukeboxPlaybackManager implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void hopper(InventoryMoveItemEvent event) {
         scheduleInventory(event.getSource());
-        scheduleInventory(event.getDestination());
+        if (!(event.getDestination().getHolder() instanceof Jukebox jukebox)) return;
+        Block block = jukebox.getBlock();
+        var marker = jukebox.getRecord().getType().isAir() && DiscDataUtil.read(event.getItem()).isPresent()
+                ? sounds.expect(block, event) : null;
+        // A refused move must not suppress a later ordinary start at the same jukebox.
+        if (marker == null) sounds.forget(block);
+        scheduleSync(block, marker);
     }
 
     private void scheduleInventory(Inventory inventory) {
         if (inventory.getHolder() instanceof Jukebox jukebox) scheduleSync(jukebox.getBlock());
     }
+
+    @EventHandler public void join(PlayerJoinEvent event) { sounds.track(event.getPlayer()); }
+
+    @EventHandler public void changeWorld(PlayerChangedWorldEvent event) { sounds.track(event.getPlayer()); }
+
+    @EventHandler public void quit(PlayerQuitEvent event) { sounds.untrack(event.getPlayer().getUniqueId()); }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void breakBlock(BlockBreakEvent event) {
@@ -205,6 +224,7 @@ public final class JukeboxPlaybackManager implements Listener {
     }
 
     public void resumeLoadedChunks() {
+        for (var player : Bukkit.getOnlinePlayers()) plugin.onMain(() -> sounds.track(player));
         for (World world : Bukkit.getWorlds())
             for (Chunk chunk : world.getLoadedChunks()) resume(chunk);
     }
@@ -219,12 +239,22 @@ public final class JukeboxPlaybackManager implements Listener {
     }
 
     private void scheduleSync(Block block) {
+        scheduleSync(block, null);
+    }
+
+    private void scheduleSync(Block block, LegacyJukeboxSounds.Marker marker) {
         Key key = Key.of(block);
         plugin.onMain(
                 () -> {
                     Block loaded = key.loadedBlock();
+                    if (marker != null) sounds.clear(marker);
                     if (loaded != null) sync(loaded, false);
                 });
+    }
+
+    public void close() {
+        sounds.close();
+        stopAll();
     }
 
     private void sync(Block block, boolean resume) {
@@ -293,15 +323,18 @@ public final class JukeboxPlaybackManager implements Listener {
                         org.bukkit.block.BlockFace.SOUTH,
                         org.bukkit.block.BlockFace.EAST,
                         org.bukkit.block.BlockFace.WEST)) {
-            var neighbor = jukebox.getBlock().getRelative(face);
-            if (!neighbor.getWorld().isChunkLoaded(neighbor.getX() >> 4, neighbor.getZ() >> 4))
-                continue;
-            if (neighbor.getBlockData() instanceof org.bukkit.block.data.type.Hopper hopper) {
-                boolean enabled = !neighbor.isBlockIndirectlyPowered();
-                if (hopper.isEnabled() != enabled) {
-                    hopper.setEnabled(enabled);
-                    neighbor.setBlockData(hopper, true);
-                }
+            Block neighbor = jukebox.getBlock().getRelative(face);
+            syncHopper(neighbor);
+        }
+    }
+
+    private static void syncHopper(Block neighbor) {
+        if (!neighbor.getWorld().isChunkLoaded(neighbor.getX() >> 4, neighbor.getZ() >> 4)) return;
+        if (neighbor.getBlockData() instanceof org.bukkit.block.data.type.Hopper hopper) {
+            boolean enabled = !neighbor.isBlockIndirectlyPowered();
+            if (hopper.isEnabled() != enabled) {
+                hopper.setEnabled(enabled);
+                neighbor.setBlockData(hopper, true);
             }
         }
     }

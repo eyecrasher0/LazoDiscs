@@ -83,10 +83,11 @@ public final class LazoDiscsVoiceAddon implements Listener, PluginMessageListene
             sink = current.source(center.getWorld(), center.getX(), center.getY(), center.getZ(), disc.title(), disc.range());
         } else {
             UUID source = UUID.randomUUID();
+            String dimension = dimensionKey(center.getWorld());
             var audience = new LegacyAudience();
             sink = new LegacyPacketSender(source, task -> plugin.onLegacyRegion(location, task),
                     (opus, sequence) -> LegacyAudioPacket.frame(source,
-                            com.eyecrasher.lazodiscs.bukkit.Messages.worldKey(center.getWorld()),
+                            dimension,
                             center.getX(), center.getY(), center.getZ(),
                             disc.range(), sequence, opus),
                     packet -> {
@@ -109,6 +110,22 @@ public final class LazoDiscsVoiceAddon implements Listener, PluginMessageListene
         StreamingSession stream = new StreamingSession(sink, failure -> plugin.onRegion(location, () -> finished.accept(failure)));
         return new Session(stream, disc);
     }
+
+    private static String dimensionKey(org.bukkit.World world) {
+        try {
+            try {
+                return world.getClass().getMethod("getKey").invoke(world).toString();
+            } catch (NoSuchMethodException olderSpigot) {
+                // Spigot 1.16.5 uses this native key in the client's login and respawn packets.
+                Object level = world.getClass().getMethod("getHandle").invoke(world);
+                Object key = level.getClass().getMethod("getDimensionKey").invoke(level);
+                return key.getClass().getMethod("a").invoke(key).toString();
+            }
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("Cannot read the Voice 1 source dimension", failure);
+        }
+    }
+
     @Override public void onPluginMessageReceived(String channel, Player player, byte[] data) {
         if (!legacy || !channel.equals(LegacyAudioPacket.CHANNEL)) return;
         try { if (LegacyAudioPacket.decode(data).kind == LegacyAudioPacket.HELLO) legacyClients.put(player.getUniqueId(), player); }

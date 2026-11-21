@@ -57,6 +57,7 @@ dependencies {
     testImplementation "io.papermc.paper:paper-api:${paperApi}"
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     compileOnly "io.papermc.paper:paper-api:${paperApi}"
+    if (legacyTarget) compileOnly 'io.netty:netty-transport:4.1.97.Final'
     compileOnly 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
 
     compileOnly('su.plo.voice.api:server:2.1.10') {

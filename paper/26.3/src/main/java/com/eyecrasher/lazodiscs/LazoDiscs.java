@@ -83,7 +83,7 @@ public final class LazoDiscs extends JavaPlugin {
             rootCommand.unregister(map);
         }
         if (commands != null) commands.shutdown();
-        if (playback != null) playback.stopAll();
+        if (playback != null) playback.close();
         AudioLoadExecutor.shutdownNow();
         // Do not initialize the audio engine just to stop an unused plugin.
         if (voice.hasLoadedAudio()) LavaPcmFeeder.shutdown();

@@ -45,6 +45,7 @@ configurations {
 
 dependencies {
     compileOnly 'org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT'
+    compileOnly 'io.netty:netty-transport:4.1.97.Final'
     shade 'net.kyori:adventure-text-serializer-gson:4.26.1'
     shade 'net.kyori:adventure-text-serializer-legacy:4.26.1'
     shade 'org.slf4j:slf4j-api:2.0.20'
@@ -221,6 +222,8 @@ def bukkitSources = tasks.register('bukkitSources', Sync) {
                 text = text.replace('Chunk chunk = event.getChunk();\n        plugin.onMain(', 'Chunk chunk = event.getChunk();\n        plugin.onRegion(new Location(chunk.getWorld(), chunk.getX() << 4, 0, chunk.getZ() << 4), ')
                 text = text.replace('plugin.onMain(\n                () -> {\n                    Block loaded = key.loadedBlock();', 'plugin.onRegion(block.getLocation(), \n                () -> {\n                    Block loaded = key.loadedBlock();')
                 text = text.replace('for (Chunk chunk : world.getLoadedChunks()) resume(chunk);', 'for (Chunk chunk : world.getLoadedChunks()) plugin.onRegion(new Location(world, chunk.getX() << 4, 0, chunk.getZ() << 4), () -> { if (chunk.isLoaded()) resume(chunk); });')
+                text = text.replace('plugin.onMain(() -> sounds.track(player));', 'plugin.onPlayer(player, () -> sounds.track(player));')
+                text = text.replace('syncHopper(neighbor);', 'plugin.onLegacyRegion(neighbor.getLocation(), () -> syncHopper(neighbor));')
                 int start = text.indexOf('    private void notifyFailure(')
                 int end = text.indexOf('    /** Validate only', start)
                 text = text.substring(0, start) + '''
