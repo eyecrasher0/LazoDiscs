@@ -271,9 +271,7 @@ processResources {
 }
 
 apply from: '../../gradle/audio-errors.gradle'
-lazoCommonAudio.setExcludes(['LegacyClientAudio', 'ReflectiveApi'].collect {
-    'com/eyecrasher/lazodiscs/voice/' + it + '.java'
-})
+lazoCommonAudio.setExcludes(['com/eyecrasher/lazodiscs/voice/LegacyClientAudio.java'])
 
 configurations { integrationApi }
 dependencies { integrationApi 'io.papermc.paper:paper-api:1.17.1-R0.1-SNAPSHOT' }

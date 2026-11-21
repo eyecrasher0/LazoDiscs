@@ -303,12 +303,7 @@ public final class SpotifyTitleResolver {
         }
 
         if (title == null || title.isBlank()) return Optional.empty();
-        String normalizedTitle = stripSpotifyDecorations(title);
-        if (artists.isEmpty()) {
-            SplitTitle split = splitTitleAndArtist(normalizedTitle);
-            normalizedTitle = split.title();
-            artists.addAll(split.artists());
-        }
+        String normalizedTitle = cleanPlainText(title);
 
         if (normalizedTitle.isBlank()) return Optional.empty();
         return Optional.of(new SpotifyMetadata(normalizedTitle, List.copyOf(artists), durationMs));
@@ -333,11 +328,7 @@ public final class SpotifyTitleResolver {
                 String line;
                 while ((line = reader.readLine()) != null) json.append(line);
             }
-            String rawTitle = extractJsonString(json.toString(), "title").orElse(null);
-            if (rawTitle == null || rawTitle.isBlank()) return Optional.empty();
-            SplitTitle split = splitTitleAndArtist(stripSpotifyDecorations(rawTitle));
-            return Optional.of(
-                    new SpotifyMetadata(split.title(), List.copyOf(split.artists()), null));
+            return parseMetadataFromOEmbed(json.toString());
         } catch (Exception e) {
             LazoDiscs.LOGGER.debug(
                     "Could not resolve Spotify oEmbed title for '{}': {}",
@@ -347,6 +338,12 @@ public final class SpotifyTitleResolver {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private static Optional<SpotifyMetadata> parseMetadataFromOEmbed(String json) {
+        String title = extractJsonString(json, "title").map(SpotifyTitleResolver::cleanPlainText).orElse("");
+        if (title.isBlank()) return Optional.empty();
+        return Optional.of(new SpotifyMetadata(title, List.of(), null));
     }
 
     private static List<String> parseArtistsFromDescription(String description, String title) {
@@ -401,7 +398,7 @@ public final class SpotifyTitleResolver {
         List<String> artists = new ArrayList<>();
 
         String[] patterns = {
-            " - song and lyrics by ", " - song by ", " - single by ", " - album by ", " by "
+            " - song and lyrics by ", " - song by ", " - single by ", " - album by "
         };
         for (String pattern : patterns) {
             int idx = t.toLowerCase(Locale.ROOT).indexOf(pattern);
@@ -410,16 +407,6 @@ public final class SpotifyTitleResolver {
                 String artistPart = t.substring(idx + pattern.length()).trim();
                 addArtists(artists, artistPart);
                 return new SplitTitle(title, artists);
-            }
-        }
-
-        int dash = t.lastIndexOf(" - ");
-        if (dash > 0) {
-            String left = t.substring(0, dash).trim();
-            String right = t.substring(dash + 3).trim();
-            if (right.length() <= 50 && !right.toLowerCase(Locale.ROOT).contains("spotify")) {
-                addArtists(artists, right);
-                return new SplitTitle(left, artists);
             }
         }
 
@@ -460,7 +447,7 @@ public final class SpotifyTitleResolver {
 
     private static String stripSpotifyDecorations(String title) {
         String t = cleanPlainText(title);
-        t = t.replace(" | Spotify", "").trim();
+        if (t.endsWith(" | Spotify")) t = t.substring(0, t.length() - " | Spotify".length()).trim();
         return t.trim();
     }
 

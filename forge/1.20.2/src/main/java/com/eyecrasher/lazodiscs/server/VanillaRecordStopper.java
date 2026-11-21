@@ -7,6 +7,6 @@ public final class VanillaRecordStopper {
     private VanillaRecordStopper() {}
 
     public static void stopAt(ServerLevel level, BlockPos pos) {
-        level.levelEvent(1010, pos, 0);
+        level.levelEvent(1011, pos, 0);
     }
 }
