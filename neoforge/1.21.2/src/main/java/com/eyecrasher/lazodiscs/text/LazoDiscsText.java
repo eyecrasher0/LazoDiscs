@@ -70,7 +70,7 @@ public final class LazoDiscsText {
     }
 
     public static String youtubeLoginRequired() {
-        return text("audio.youtube_login_required");
+        return com.eyecrasher.lazodiscs.voice.YoutubeLoginFailure.PLAYER_MESSAGE;
     }
 
     public static String audioLoadBusy() {

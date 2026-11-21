@@ -15,8 +15,6 @@ import com.sedmelluq.discord.lavaplayer.player.DefaultAudioPlayerManager;
 import com.sedmelluq.discord.lavaplayer.source.bandcamp.BandcampAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.beam.BeamAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.getyarn.GetyarnAudioSourceManager;
-import com.sedmelluq.discord.lavaplayer.source.http.HttpAudioSourceManager;
-import com.sedmelluq.discord.lavaplayer.source.local.LocalAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.nico.NicoAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.twitch.TwitchStreamAudioSourceManager;
 import com.sedmelluq.discord.lavaplayer.source.vimeo.VimeoAudioSourceManager;
@@ -91,8 +89,7 @@ public final class LavaPcmFeeder {
             manager.registerSourceManager(new BeamAudioSourceManager());
             manager.registerSourceManager(new GetyarnAudioSourceManager());
             manager.registerSourceManager(new NicoAudioSourceManager());
-            manager.registerSourceManager(new HttpAudioSourceManager());
-            manager.registerSourceManager(new LocalAudioSourceManager());
+            manager.registerSourceManager(new DirectMediaSource(DiscDataUtil::validateUrl));
         } catch (Throwable t) {
             LazoDiscs.LOGGER.warn(
                     "LazoDiscs could not register default LavaPlayer source managers ({}): {}",
@@ -222,7 +219,11 @@ public final class LavaPcmFeeder {
                 new AudioLoadResultHandler() {
                     @Override
                     public void trackLoaded(AudioTrack track) {
-                        result.set(track);
+                        if (metadata == null || TrackMatchScorer.matchesTitle(track.getInfo().title, metadata.title())) {
+                            result.set(track);
+                        } else {
+                            failure.set(new RuntimeException(LazoDiscsText.audioNoMatches()));
+                        }
                         latch.countDown();
                     }
 
@@ -355,28 +356,14 @@ public final class LavaPcmFeeder {
             if (!LazoDiscsConfig.SPOTIFY_SEARCH_VIA_YOUTUBE.get()) {
                 throw new IllegalArgumentException(LazoDiscsText.spotifyDisabled());
             }
-            TrackMetadata metadata =
-                    SpotifyTitleResolver.resolveMetadata(raw)
-                            .map(
-                                    spotify ->
-                                            new TrackMetadata(
-                                                    spotify.title(),
-                                                    spotify.artists(),
-                                                    spotify.durationMs()))
-                            .orElse(null);
-            String query;
-            if (metadata != null && !metadata.searchQuery().isBlank()) {
-                query = metadata.searchQuery();
-            } else {
-                query =
-                        Optional.ofNullable(fallbackTitle)
-                                .filter(s -> !s.isBlank() && !s.equals(raw))
-                                .orElseThrow(
-                                        () ->
-                                                new IllegalArgumentException(
-                                                        LazoDiscsText.spotifyMetadataFailed()));
-            }
-            return new ResolveRequest("ytmsearch:" + query, metadata);
+            TrackMetadata metadata = SpotifyTitleResolver.resolveMetadata(raw)
+                    .map(spotify -> new TrackMetadata(spotify.title(), spotify.artists(), spotify.durationMs()))
+                    .filter(track -> !track.title().isBlank())
+                    .orElseGet(() -> Optional.ofNullable(fallbackTitle)
+                            .filter(title -> !title.isBlank() && !title.equals(raw))
+                            .map(title -> new TrackMetadata(title, List.of(), null))
+                            .orElseThrow(() -> new IllegalArgumentException(LazoDiscsText.spotifyMetadataFailed())));
+            return new ResolveRequest("ytmsearch:" + metadata.searchQuery(), metadata);
         }
 
         try {

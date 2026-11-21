@@ -11,7 +11,7 @@ description="Positional jukebox music for legacy Plasmo Voice servers."
 [[dependencies.lazodiscs_legacy_client]]
 modId="minecraft"
 mandatory=true
-versionRange="[1.19,1.19.3)"
+versionRange="[1.19,1.19.1]"
 ordering="NONE"
 side="CLIENT"
 [[dependencies.lazodiscs_legacy_client]]

@@ -81,7 +81,8 @@ The universal adapter keeps vanilla disc types and PDC recordings. On older Bukk
 servers, stopping the vanilla song uses the native record-stop event; hopper and
 redstone behavior follows that server's jukebox API. Newer native Paper builds
 use silent songs. Voice 1 supports positional jukebox playback; its extra client
-transport uses Voice 1's Opus decoder, audio engine and listener volume settings.
+transport uses Voice 1's Opus decoder, audio engine and listener volume settings,
+with bounded PCM/OpenAL storage owned and released by LazoDiscs.
 Optional Sophisticated Backpacks integration requires Voice 2.
 
 Minecraft 1.7.10, 1.8.9 and 1.12.2 are excluded because there is no official Plasmo
@@ -93,3 +94,11 @@ whose own Minecraft dependency starts at 1.17.1. The published Voice metadata
 lists 1.17 broadly, so this constraint is recorded explicitly in
 [compatibility-policy.json](../compatibility-policy.json) and checked with a real
 Fabric Loader launch.
+
+## Recorded links and diagnostics
+
+Portable recordings retain the complete playable URL, including signed query
+parameters. LazoDiscs and its bundled audio/HTTP libraries redact URL credentials,
+paths and query values from their logs. Private HTTP protocol debug output is
+disabled; unrelated warnings and errors retain their diagnostic details. Stored
+recordings obey the current server hearing-range cap when read for playback.

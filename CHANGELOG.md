@@ -2,6 +2,10 @@
 
 ## 1.0.8
 
+- Bound and release Voice 1 client PCM storage and OpenAL buffers while keeping the official Voice decoder and engine. Retire sender pools without interrupting cold Forge archive reads.
+- Enforce direct-media URL policy on HTTP probes, redirects, HLS playlists and segments. Keep complete signed links on portable discs while redacting media URLs from owned logs; suppress private HTTP protocol debug output.
+- Apply the current hearing-range cap to stored recordings and stop only the affected jukebox's vanilla song. Reject Spotify candidates whose ordered title does not match.
+- Observe held-source retirement and natural decoded timecodes in mod server checks, including a short-track control. Validate shipped LavaPlayer/HTTP logging and retain exact server, Voice and staged-artifact provenance when resuming checks.
 - Prepare the first decoded frame before exposing playback and stop decoders cooperatively at buffer boundaries, preventing cancellation from interrupting shared archive reads on older Forge. Preserve the first frame and report decoding failures that arrive after playback starts.
 - Use server-safe position logging on Minecraft 1.16.5 and exclude compile annotations that otherwise cause NeoForge module conflicts.
 - Give archived Voice 2.1.8 ports the same explicit streaming sources, SoundCloud AAC support and Spotify title matching as the other distributions.

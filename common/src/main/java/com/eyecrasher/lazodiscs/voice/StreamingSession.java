@@ -25,6 +25,7 @@ public final class StreamingSession implements AutoCloseable {
     }
     private static final Set<StreamingSession> ACTIVE = ConcurrentHashMap.newKeySet();
     private static ScheduledExecutorService clock;
+    private final ScheduledExecutorService scheduler;
     private final Sink sink;
     private final Consumer<String> finished;
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -34,14 +35,24 @@ public final class StreamingSession implements AutoCloseable {
     private String title;
     private long sequence, lastFrame;
 
-    public StreamingSession(Sink sink, Consumer<String> finished) { this.sink = sink; this.finished = finished; ACTIVE.add(this); }
-    private static synchronized ScheduledExecutorService clock() {
-        if (clock == null || clock.isShutdown()) clock = Executors.newScheduledThreadPool(2, task -> {
+    public StreamingSession(Sink sink, Consumer<String> finished) {
+        this.sink = sink;
+        this.finished = finished;
+        synchronized (StreamingSession.class) {
+            scheduler = clock;
+            if (scheduler != null) ACTIVE.add(this);
+        }
+        if (scheduler == null) close();
+    }
+
+    public static synchronized void enable() {
+        if (clock == null) clock = Executors.newScheduledThreadPool(2, task -> {
             Thread worker = new Thread(task, "LazoDiscs-Streaming"); worker.setDaemon(true); return worker;
         });
-        return clock;
     }
+
     public void start(CustomDiscData disc) {
+        if (closed.get()) return;
         title = disc.title();
         load = AudioLoadExecutor.submit(() -> {
             try {
@@ -56,7 +67,7 @@ public final class StreamingSession implements AutoCloseable {
                         @Override public void onTrackStuck(AudioPlayer player, AudioTrack track, long threshold) { failure = LazoDiscsText.trackStuck(threshold); }
                     });
                     lastFrame = System.nanoTime();
-                    sender = clock().scheduleAtFixedRate(this::tick, 0, 20, TimeUnit.MILLISECONDS);
+                    sender = scheduler.scheduleAtFixedRate(this::tick, 0, 20, TimeUnit.MILLISECONDS);
                 }
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
@@ -70,6 +81,7 @@ public final class StreamingSession implements AutoCloseable {
         try {
             var opened = playback;
             var frame = opened.player().provide();
+            if (closed.get()) return;
             if (frame != null) { sink.frame(frame.getData(), sequence++); lastFrame = System.nanoTime(); return; }
             if (failure != null) { finish(failure, false); return; }
             var state = opened.track().getState();
@@ -102,12 +114,16 @@ public final class StreamingSession implements AutoCloseable {
     }
     @Override public void close() { finish(null, true); }
     public static void shutdown() {
-        // A loader holds its session lock while obtaining the clock. Never hold the
-        // class lock while closing sessions, or disable can deadlock with that loader.
-        for (var session : ACTIVE.toArray(new StreamingSession[0])) session.close();
         ScheduledExecutorService stopped;
-        synchronized (StreamingSession.class) { stopped = clock; clock = null; }
-        if (stopped != null) stopped.shutdownNow();
+        StreamingSession[] sessions;
+        synchronized (StreamingSession.class) {
+            stopped = clock;
+            if (stopped == null) return;
+            clock = null;
+            sessions = ACTIVE.toArray(new StreamingSession[0]);
+        }
+        for (StreamingSession session : sessions) session.close();
+        stopped.shutdown();
     }
     public static String messageOf(Throwable error) {
         if (YoutubeLoginFailure.matches(error)) return LazoDiscsText.youtubeLoginRequired();

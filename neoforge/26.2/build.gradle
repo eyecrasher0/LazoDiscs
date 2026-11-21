@@ -40,7 +40,7 @@ configurations {
 }
 
 neoForge {
-    version = '26.2.0.93'
+    version = '26.2.0.95'
     mods {
         lazodiscs {
             sourceSet(sourceSets.main)
@@ -49,7 +49,7 @@ neoForge {
 }
 
 dependencies {
-    implementation 'net.neoforged:neoforge:26.2.0.93'
+    implementation 'net.neoforged:neoforge:26.2.0.95'
 
     // Plasmo Voice API is compile-only because the real Plasmo Voice mod provides it at runtime.
     // Its transitive Guava/FastUtil versions conflict with Minecraft 26.2 strict dependency pins,

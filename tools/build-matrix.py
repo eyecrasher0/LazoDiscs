@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build the exact advertised mod/plugin artifacts and keep a hash-bound result ledger."""
-import argparse,concurrent.futures,contextlib,fcntl,hashlib,json,os,shutil,subprocess,time
+import argparse,concurrent.futures,contextlib,fcntl,hashlib,json,os,shutil,subprocess,tempfile,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 def main():
@@ -33,14 +33,35 @@ def main():
         for file in sorted(files):
             digest.update(str(file.relative_to(ROOT)).encode());digest.update(b'\0');digest.update(file.read_bytes());digest.update(b'\0')
         return digest.hexdigest()
+    def artifact_for(platform,mc):
+        if platform=='legacy-client':
+            loader=mc.split('-')[0]
+            client_mc='1.16.5' if mc.endswith('1.16.5') else '1.19-1.19.1'
+            name=f'lazodiscs-voice1-client-{loader}-1.0.8+{client_mc}.jar'
+        elif platform=='bukkit': name='lazodiscs-bukkit-1.0.8.jar'
+        else: name=f'lazodiscs-{platform}-1.0.8+{mc}.jar'
+        return output/platform/mc/'libs'/name
+    def stage(artifact,digest):
+        staged=output/'release'/artifact.name;staged.parent.mkdir(exist_ok=True)
+        if staged.is_file() and hashlib.sha256(staged.read_bytes()).hexdigest()==digest:return
+        with tempfile.NamedTemporaryFile(dir=staged.parent,prefix=staged.name+'.',delete=False) as stream:
+            temporary=Path(stream.name)
+        try:
+            shutil.copy2(artifact,temporary)
+            if hashlib.sha256(temporary.read_bytes()).hexdigest()!=digest:
+                raise RuntimeError(f'Artifact changed while staging {artifact}')
+            temporary.replace(staged)
+        finally:
+            temporary.unlink(missing_ok=True)
     def run(target):
         platform,mc,module=target;row={'platform':platform,'minecraft':mc};start=time.monotonic()
         fingerprint=inputs_digest(module,platform);row['build_inputs_sha256']=fingerprint
         result=output/'results'/('compile' if args.compile_only else 'build')/platform/(mc+'.json')
+        artifact=artifact_for(platform,mc)
         if args.resume and result.exists():
             prior=json.loads(result.read_text())
-            artifact=Path(prior.get('artifact','/missing'))
-            if prior.get('status')=='pass' and prior.get('build_inputs_sha256')==fingerprint and (args.compile_only or artifact.is_file() and hashlib.sha256(artifact.read_bytes()).hexdigest()==prior.get('sha256')):
+            if prior.get('status')=='pass' and prior.get('build_inputs_sha256')==fingerprint and (args.compile_only or prior.get('artifact')==str(artifact) and artifact.is_file() and hashlib.sha256(artifact.read_bytes()).hexdigest()==prior.get('sha256')):
+                if not args.compile_only:stage(artifact,prior['sha256'])
                 print(json.dumps(dict(prior,reused=True)),flush=True);return prior
         command=[str(module/'gradlew'),'-p',str(module),'--project-cache-dir',str(output/'project-cache'/platform/mc),f'-PlazoOutputRoot={output}','--console=plain','--max-workers=2']
         # ForgeGradle6 caches MCP services from a closed project when a daemon is reused.
@@ -62,19 +83,10 @@ def main():
                 stream=resources.enter_context(log.open('w'))
                 subprocess.run(command,cwd=ROOT,stdout=stream,stderr=subprocess.STDOUT,check=True,timeout=900)
             if inputs_digest(module,platform)!=fingerprint:raise RuntimeError('Build inputs changed while Gradle was running; rebuild this target')
-            folder=output/platform/mc/'libs'
-            if platform=='legacy-client':
-                loader=mc.split('-')[0]
-                client_mc='1.16.5' if mc.endswith('1.16.5') else '1.19-1.19.1'
-                expected=f'lazodiscs-voice1-client-{loader}-1.0.8+{client_mc}.jar'
-            elif platform=='bukkit': expected='lazodiscs-bukkit-1.0.8.jar'
-            else: expected=f'lazodiscs-{platform}-1.0.8+{mc}.jar'
-            jars=[folder/expected] if (folder/expected).is_file() else []
-            if not args.compile_only and len(jars)!=1:raise RuntimeError(f'Expected one final release JAR, found {jars}')
-            if jars and not args.compile_only:
-                row.update(artifact=str(jars[0]),sha256=hashlib.sha256(jars[0].read_bytes()).hexdigest())
-                staged=output/'release'/jars[0].name;staged.parent.mkdir(exist_ok=True)
-                shutil.copy2(jars[0],staged)
+            if not args.compile_only:
+                if not artifact.is_file():raise RuntimeError(f'Missing final release JAR: {artifact}')
+                row.update(artifact=str(artifact),sha256=hashlib.sha256(artifact.read_bytes()).hexdigest())
+                stage(artifact,row['sha256'])
             row['status']='pass'
         except Exception as error:row.update(status='fail',error=str(error))
         row['seconds']=round(time.monotonic()-start,1)

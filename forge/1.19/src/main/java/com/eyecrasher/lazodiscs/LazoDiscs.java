@@ -20,12 +20,11 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Mod(LazoDiscs.MOD_ID)
 public final class LazoDiscs {
     public static final String MOD_ID = "lazodiscs";
-    public static final Logger LOGGER = LoggerFactory.getLogger("LazoDiscs");
+    public static final Logger LOGGER = com.eyecrasher.lazodiscs.voice.AudioLogs.getLogger("LazoDiscs");
 
     private static volatile MinecraftServer currentServer;
 

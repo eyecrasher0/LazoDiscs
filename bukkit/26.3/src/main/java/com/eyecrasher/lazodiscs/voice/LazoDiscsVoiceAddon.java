@@ -28,6 +28,7 @@ public final class LazoDiscsVoiceAddon implements Listener, PluginMessageListene
         if (voice == null) throw new IllegalStateException("Plasmo Voice is required");
         legacy = voice.getDescription().getVersion().startsWith("1.");
         logs.install();
+        StreamingSession.enable();
         if (legacy) return;
         addon = new Addon(this);
         Object loader = loader();

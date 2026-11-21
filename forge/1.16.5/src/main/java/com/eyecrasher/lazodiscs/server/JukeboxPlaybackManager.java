@@ -29,9 +29,11 @@ public final class JukeboxPlaybackManager {
 
     public void onJukeboxItemChanged(
             ServerWorld level, BlockPos pos, ItemStack newStack, String reason) {
-        // Do not spam StopSoundPacket several times for one insertion. The new start() call
-        // will stop vanilla RECORDS once after it knows whether a custom disc is actually present.
-        stopAt(level, pos, reason + ":before-change", false);
+        ActiveJukeboxSource retired = retireAt(level, pos, reason + ":before-change");
+        if (retired != null && newStack.isEmpty()) {
+            // Setter callbacks run after vanilla has stored the new item.
+            com.eyecrasher.lazodiscs.voice.PlaybackProbe.emptySlot(retired.disc().id());
+        }
 
         DiscDataUtil.read(newStack)
                 .ifPresent(
@@ -51,7 +53,10 @@ public final class JukeboxPlaybackManager {
         if (DiscDataUtil.hasCustomDisc(stack)) {
             onJukeboxItemChanged(level, pos, stack, reason);
         } else {
-            stopAt(level, pos, reason + ":not-custom-disc");
+            ActiveJukeboxSource retired = retireAt(level, pos, reason + ":not-custom-disc");
+            if (retired != null && stack.isEmpty()) {
+                com.eyecrasher.lazodiscs.voice.PlaybackProbe.emptySlot(retired.disc().id());
+            }
         }
     }
 
@@ -67,7 +72,7 @@ public final class JukeboxPlaybackManager {
                             + "and allowPlaybackOnSablePlatforms is disabled in config.",
                     disc.title(),
                     pos.toString());
-            VanillaRecordStopper.stopVanillaRecordsNear(level, pos, 4.0D);
+            VanillaRecordStopper.stopAt(level, pos);
             return;
         }
 
@@ -77,7 +82,7 @@ public final class JukeboxPlaybackManager {
                     disc.title(),
                     pos.toString(),
                     reason);
-            VanillaRecordStopper.stopVanillaRecordsNear(level, pos, 4.0D);
+            VanillaRecordStopper.stopAt(level, pos);
             return;
         }
 
@@ -113,7 +118,7 @@ public final class JukeboxPlaybackManager {
                             source,
                             new java.util.concurrent.atomic.AtomicBoolean(dynamicPosition)));
             // Stop vanilla record sound that may have started from the original music disc.
-            VanillaRecordStopper.stopVanillaRecordsNear(level, pos, 4.0D);
+            VanillaRecordStopper.stopAt(level, pos);
             LazoDiscs.LOGGER.info(
                     "Started LazoDisc '{}' at {} ({}, dynamicPosition={})",
                     disc.title(),
@@ -143,24 +148,20 @@ public final class JukeboxPlaybackManager {
     }
 
     public void stopAt(ServerWorld level, BlockPos pos, String reason) {
-        stopAt(level, pos, reason, true);
+        retireAt(level, pos, reason);
     }
 
-    private void stopAt(
-            ServerWorld level, BlockPos pos, String reason, boolean stopVanillaRecords) {
+    private ActiveJukeboxSource retireAt(ServerWorld level, BlockPos pos, String reason) {
         ActiveJukeboxSource old = active.remove(new SourceKey(level.dimension(), pos.immutable()));
-        if (old != null) {
-            try {
-                old.stop();
-            } catch (Throwable e) {
-                LazoDiscs.LOGGER.warn(
-                        "Failed to stop LazoDisc at {}: {}", pos.toString(), e.toString());
-            }
-            LazoDiscs.LOGGER.info("Stopped LazoDisc at {} ({})", pos.toString(), reason);
+        if (old == null) return null;
+        try {
+            old.stop();
+        } catch (Throwable error) {
+            LazoDiscs.LOGGER.warn("Failed to stop LazoDisc at {}", pos, error);
+            return null;
         }
-        if (stopVanillaRecords) {
-            VanillaRecordStopper.stopVanillaRecordsNear(level, pos, 4.0D);
-        }
+        LazoDiscs.LOGGER.info("Stopped LazoDisc at {} ({})", pos, reason);
+        return old;
     }
 
     public void stopChunk(ServerWorld level, ChunkPos chunkPos, String reason) {

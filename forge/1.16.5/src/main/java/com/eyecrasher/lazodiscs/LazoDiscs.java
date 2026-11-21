@@ -25,7 +25,7 @@ import org.apache.logging.log4j.Logger;
 @Mod(LazoDiscs.MOD_ID)
 public final class LazoDiscs {
     public static final String MOD_ID = "lazodiscs";
-    public static final Logger LOGGER = LogManager.getLogger("LazoDiscs");
+    public static final Logger LOGGER = com.eyecrasher.lazodiscs.voice.AudioLogs.getLog4jLogger("LazoDiscs");
 
     private static volatile MinecraftServer currentServer;
 

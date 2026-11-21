@@ -45,7 +45,7 @@ configurations {
 
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.14.1'
-    testImplementation 'org.apache.logging.log4j:log4j-core:2.26.0'
+    testImplementation 'org.apache.logging.log4j:log4j-core:2.26.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     compileOnly 'org.spigotmc:spigot-api:1.16.5-R0.1-SNAPSHOT'
     shade 'net.kyori:adventure-text-serializer-gson:4.26.1'
@@ -205,7 +205,6 @@ def bukkitSources = tasks.register('bukkitSources', Sync) {
         include 'com/eyecrasher/lazodiscs/config/**'
         include 'com/eyecrasher/lazodiscs/data/**'
         include 'com/eyecrasher/lazodiscs/text/**'
-        filter { String line -> line }
     }
     from('../../paper/26.3/src/legacy/java') { exclude 'com/eyecrasher/lazodiscs/data/DiscSongs.java' }
     into layout.buildDirectory.dir('generated/sources/bukkit')
@@ -219,10 +218,6 @@ def bukkitSources = tasks.register('bukkitSources', Sync) {
             text = text.replace('new HashMap<>()', 'new java.util.concurrent.ConcurrentHashMap<>()')
             if (source.name == 'LazoDiscsCommands.java') {
                 text = text.replace('plugin.onMain(', 'plugin.onPlayer(player, ')
-                text = text.replace('private void cancel(UUID player)', 'public void cancel(UUID player)')
-            }
-            if (source.name == 'LazoDiscsVoiceAddon.java') {
-                text = text.replace('return new Session(source, disc, finished);', 'return new Session(source, disc, reason -> plugin.onRegion(location, () -> finished.accept(reason)));')
             }
             if (source.name == 'JukeboxPlaybackManager.java') {
                 text = text.replace('plugin.onMain(() -> insertedThisTick.remove(player, key));', 'plugin.onRegion(jukebox.getLocation(), () -> insertedThisTick.remove(player, key));')

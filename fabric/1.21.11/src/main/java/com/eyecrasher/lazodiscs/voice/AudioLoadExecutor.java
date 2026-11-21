@@ -2,6 +2,8 @@ package com.eyecrasher.lazodiscs.voice;
 
 import com.eyecrasher.lazodiscs.config.LazoDiscsConfig;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -77,8 +79,11 @@ public final class AudioLoadExecutor {
         }
     }
 
-    private static void cancelPending(ExecutorService pool) {
-        for (Runnable pending : pool.shutdownNow()) {
+    private static void cancelPending(ThreadPoolExecutor pool) {
+        List<Runnable> queued = new ArrayList<>();
+        pool.getQueue().drainTo(queued);
+        pool.shutdown();
+        for (Runnable pending : queued) {
             if (pending instanceof Future<?> future) future.cancel(false);
         }
     }

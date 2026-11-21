@@ -6,9 +6,7 @@ import dev.lavalink.youtube.ClientException;
 import dev.lavalink.youtube.clients.MWebWithThumbnail;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.core.config.DefaultConfiguration;
 import org.apache.logging.log4j.core.layout.PatternLayout;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,8 +49,8 @@ class YoutubeLoginFailureTest {
         field.set(null, directory);
         try {
             Files.createDirectories(directory.resolve("lang"));
-            // Existing server language files do not contain the new key yet.
-            Files.writeString(directory.resolve("lang/en_us.toml"), "command.burn_failed = \"Could not burn disc: %reason%\"\n");
+            // A language override must not replace the mandated English YouTube reason.
+            Files.writeString(directory.resolve("lang/en_us.toml"), "command.burn_failed = \"Could not burn disc: %reason%\"\naudio.youtube_login_required = \"Custom translated refusal\"\n");
             assertEquals("YouTube requires sign-in. Please try another link.",
                     LazoDiscsVoiceAddon.messageOf(refused()));
             assertEquals("YouTube requires sign-in. Please try another link.",
@@ -85,68 +83,98 @@ class YoutubeLoginFailureTest {
         assertFalse(YoutubeLoginFailure.matches(a));
     }
 
-    @Test void realLog4jPipelineReplacesOnlyKnownStackAndDetachesCleanly() {
+    @Test void ownedLoggersReplaceOnlyKnownStacksAndLeaveHostLoggersAlone() {
         List<String> shortWarnings = new ArrayList<>();
-        List<LogEvent> originalEvents = new ArrayList<>();
-        try (LoggerContext context = new LoggerContext("lazodiscs-error-test")) {
-            var configuration = new DefaultConfiguration();
-            configuration.getRootLogger().setLevel(Level.ALL);
-            context.start(configuration);
-            var logger = context.getLogger("com.sedmelluq.discord.lavaplayer.track.playback.LocalAudioTrackExecutor");
-            logger.setLevel(Level.ALL);
-            logger.setAdditive(false);
-            var appender = new AbstractAppender("capture", null, PatternLayout.createDefaultLayout(), false) {
-                @Override public void append(LogEvent event) { originalEvents.add(event.toImmutable()); }
-            };
-            appender.start();
-            logger.addAppender(appender);
+        List<LogEvent> events = new ArrayList<>();
+        var host = (org.apache.logging.log4j.core.Logger) org.apache.logging.log4j.LogManager.getLogger(
+                "com.sedmelluq.discord.lavaplayer.track.playback.LocalAudioTrackExecutor");
+        var previousLevel = host.getLevel();
+        boolean previousAdditive = host.isAdditive();
+        var appender = new AbstractAppender("capture", null, PatternLayout.createDefaultLayout(), false) {
+            @Override public void append(LogEvent event) { events.add(event.toImmutable()); }
+        };
+        appender.start();
+        host.addAppender(appender);
+        host.setLevel(Level.ALL);
+        host.setAdditive(false);
+        try {
+            var log4j = AudioLogs.getLog4jLogger(host.getName());
+            var slf4j = AudioLogs.getLogger(host.getName());
             try (var filter = new YoutubeLoginLogFilter(shortWarnings::add)) {
-                filter.attachLog4j(logger);
-                logger.warn("Suspicious exception for playback of _fMQnR0YApg", refused());
-                assertEquals(1, shortWarnings.size());
-                assertEquals("YouTube requires sign-in (playback of _fMQnR0YApg). Try another link.", shortWarnings.get(0));
-                assertTrue(originalEvents.isEmpty(), "Known sign-in stack must not reach appenders");
+                filter.install();
+                log4j.warn("Suspicious exception for playback of _fMQnR0YApg", refused());
+                slf4j.warn("Suspicious exception for playback of _fMQnR0YApg", refused());
+                assertEquals(List.of(
+                        "YouTube requires sign-in (playback of _fMQnR0YApg). Try another link.",
+                        "YouTube requires sign-in (playback of _fMQnR0YApg). Try another link."), shortWarnings);
+                assertTrue(events.isEmpty(), "Known sign-in stacks must not reach appenders");
 
                 var unexpected = new IOException("Unexpected decoder/network failure");
-                logger.warn("Unexpected audio error", unexpected);
-                assertEquals(1, originalEvents.size());
-                assertSame(unexpected, originalEvents.get(0).getThrown());
+                slf4j.warn("Unexpected audio error", unexpected);
+                assertEquals(1, events.size());
+                assertSame(unexpected, events.get(0).getThrown());
 
                 var mixed = new AllClientsFailedException(List.of(
                         client(reason("This video requires login.")), client(new IOException("Connection reset"))));
-                logger.warn("Mixed audio error", mixed);
-                assertEquals(2, originalEvents.size());
-                assertSame(mixed, originalEvents.get(originalEvents.size() - 1).getThrown());
-                assertEquals(1, shortWarnings.size());
+                log4j.warn("Mixed audio error", mixed);
+                assertEquals(2, events.size());
+                assertSame(mixed, events.get(1).getThrown());
+
+                // An identical logger name used outside this plugin's wrapper remains untouched.
+                var otherPlugin = refused();
+                host.warn("Another plugin's playback", otherPlugin);
+                assertSame(otherPlugin, events.get(2).getThrown());
+                assertEquals(2, shortWarnings.size());
             }
-            logger.warn("After plugin shutdown", refused());
-            assertEquals(3, originalEvents.size(), "Plugin shutdown must remove its filter");
-            assertEquals(1, shortWarnings.size());
+            slf4j.warn("After plugin shutdown", refused());
+            assertEquals(4, events.size());
+            assertEquals(2, shortWarnings.size());
+        } finally {
+            host.removeAppender(appender);
+            host.setLevel(previousLevel);
+            host.setAdditive(previousAdditive);
+            appender.stop();
         }
     }
-    @Test void julReplacesOnlyKnownFailuresAndRestoresPreviousFilter() {
-        var logger = java.util.logging.Logger.getLogger("LazoDiscs.test.audio");
-        var previous = logger.getFilter();
-        var events = new ArrayList<java.util.logging.LogRecord>();
-        var warnings = new ArrayList<String>();
-        var handler = new java.util.logging.Handler() {
-            public void publish(java.util.logging.LogRecord record) { events.add(record); }
-            public void flush() {}
-            public void close() {}
+
+    @Test void ownedLoggersRedactMediaUrlsWithoutMutatingOriginalErrors() {
+        var events = new ArrayList<LogEvent>();
+        String url = "https://user:secret@media.example/private-token/song.wav?token=signed-secret#fragment";
+        var original = new IOException("Network failure for " + url, new IllegalStateException("decoder details"));
+        var host = (org.apache.logging.log4j.core.Logger) org.apache.logging.log4j.LogManager.getLogger("LazoDiscs.test.urls");
+        var previousLevel = host.getLevel();
+        boolean previousAdditive = host.isAdditive();
+        var appender = new AbstractAppender("url-capture", null, PatternLayout.createDefaultLayout(), false) {
+            @Override public void append(LogEvent event) { events.add(event.toImmutable()); }
         };
-        logger.setUseParentHandlers(false);
-        logger.addHandler(handler);
-        try (var filter = new YoutubeLoginLogFilter(warnings::add)) {
-            filter.attach(logger);
-            logger.log(java.util.logging.Level.WARNING, "Suspicious exception for playback", refused());
-            assertEquals(1, warnings.size());
-            assertTrue(events.isEmpty());
-            var unknown = new IOException("Connection reset");
-            logger.log(java.util.logging.Level.WARNING, "Unknown", unknown);
-            assertEquals(1, events.size());
-            assertSame(unknown, events.get(0).getThrown());
-        } finally { logger.removeHandler(handler); }
-        assertSame(previous, logger.getFilter());
+        appender.start();
+        host.addAppender(appender);
+        host.setLevel(Level.ALL);
+        host.setAdditive(false);
+        try {
+            AudioLogs.getLogger(host.getName()).warn("Could not load {}", url, original);
+            AudioLogs.getLog4jLogger(host.getName()).error("Could not load " + url, original);
+            assertEquals(2, events.size());
+            for (var event : events) {
+                String rendered = event.getMessage().getFormattedMessage();
+                assertFalse(rendered.contains("signed-secret"));
+                assertFalse(rendered.contains("user:secret"));
+                assertFalse(rendered.contains("private-token"));
+                assertTrue(rendered.contains("https://media.example/…"));
+                assertTrue(rendered.contains("java.io.IOException: Network failure"));
+                assertTrue(rendered.contains("Caused by: java.lang.IllegalStateException: decoder details"));
+                assertTrue(rendered.contains("YoutubeLoginFailureTest.java:"), "The unrelated stack remains available");
+                assertNull(event.getThrown(), "The original secret-bearing throwable must not be rendered again");
+            }
+            assertEquals(Level.WARN, events.get(0).getLevel());
+            assertEquals(Level.ERROR, events.get(1).getLevel());
+            assertEquals("Network failure for " + url, original.getMessage());
+        } finally {
+            host.removeAppender(appender);
+            host.setLevel(previousLevel);
+            host.setAdditive(previousAdditive);
+            appender.stop();
+        }
     }
 
     @Test void unrelatedPluginCopyWithSameClassNameIsNotFiltered() throws Exception {

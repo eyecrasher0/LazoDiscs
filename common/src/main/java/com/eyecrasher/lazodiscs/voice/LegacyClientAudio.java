@@ -1,5 +1,9 @@
 package com.eyecrasher.lazodiscs.voice;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -29,20 +33,30 @@ public final class LegacyClientAudio {
                         if (context == 0) return;
                         Channel channel = CHANNELS.get(packet.source);
                         if (packet.kind == LegacyAudioPacket.STOP || !world.equals(packet.world)) {
-                            if (channel != null) { channel.close(); CHANNELS.remove(packet.source); }
+                            if (channel != null) {
+                                CHANNELS.remove(packet.source);
+                                channel.close();
+                            }
                             return;
                         }
                         if (channel == null) {
                             if (CHANNELS.size() >= 32) return;
-                            Object source = ReflectiveApi.call(engine, "createSource");
-                            if (source == null) return;
                             Class<?> recorder = Class.forName("su.plo.voice.client.sound.Recorder");
                             int rate = ((Number) recorder.getMethod("getSampleRate").invoke(null)).intValue();
-                            Object decoder = Class.forName("su.plo.voice.client.sound.opus.OpusDecoder").getConstructor(int.class, int.class, int.class).newInstance(rate, rate / 50 * 2, 4096);
-                            channel = new Channel(source, decoder, engine, context, capabilities);
+                            Constructor<?> decoderFactory = Class.forName("su.plo.voice.client.sound.opus.OpusDecoder")
+                                    .getConstructor(int.class, int.class, int.class);
+                            Object source = ReflectiveApi.call(engine, "createSource");
+                            if (source == null) return;
+                            try {
+                                Object decoder = decoderFactory.newInstance(rate, rate / 50 * 2, 4096);
+                                channel = new Channel(source, decoder, engine, context, capabilities, rate);
+                            } catch (ReflectiveOperationException | RuntimeException | LinkageError error) {
+                                ReflectiveApi.call(source, "close");
+                                throw error;
+                            }
+                            CHANNELS.put(packet.source, channel);
                             ReflectiveApi.call(source, "setRelative", false);
                             ReflectiveApi.call(source, "setLooping", false);
-                            CHANNELS.put(packet.source, channel);
                         }
                         if (packet.sequence <= channel.sequence) return;
                         channel.sequence = packet.sequence;
@@ -55,8 +69,8 @@ public final class LegacyClientAudio {
                         ReflectiveApi.call(channel.source, "setPosition", vector.apply(packet));
                         ReflectiveApi.call(channel.source, "setFadeDistance", packet.range / 2.0F);
                         ReflectiveApi.call(channel.source, "setMaxDistance", (float) packet.range, 0.95F);
-                        ReflectiveApi.call(channel.source, "write", ReflectiveApi.call(channel.decoder, "decode", packet.opus));
-                    } catch (ReflectiveOperationException | RuntimeException error) {
+                        channel.write((byte[]) ReflectiveApi.call(channel.decoder, "decode", packet.opus));
+                    } catch (ReflectiveOperationException | RuntimeException | LinkageError error) {
                         failure(error);
                         Channel old = CHANNELS.remove(packet.source);
                         if (old != null) old.close();
@@ -80,13 +94,14 @@ public final class LegacyClientAudio {
                     discardInvalidContexts(engine, context, capabilities);
                     CHANNELS.entrySet().removeIf(entry -> {
                         if (connected && System.nanoTime() - entry.getValue().lastFrame < 2_000_000_000L) return false;
-                        entry.getValue().close(); return true;
+                        entry.getValue().close();
+                        return true;
                     });
                 }
             });
         } catch (ReflectiveOperationException | RuntimeException unavailable) {
             synchronized (CHANNELS) {
-                for (Channel channel : CHANNELS.values()) channel.closeDecoder();
+                for (Channel channel : CHANNELS.values()) channel.freeNativeMemory();
                 CHANNELS.clear();
             }
         }
@@ -101,22 +116,96 @@ public final class LegacyClientAudio {
             Channel channel = entry.getValue();
             if (channel.engine == engine && channel.context == context && channel.capabilities == capabilities) return false;
             // Voice destroyed the old OpenAL context. Its numeric source IDs can now
-            // belong to unrelated sounds; only the independent decoder is ours to close.
-            channel.closeDecoder();
+            // belong to unrelated sounds.
+            channel.freeNativeMemory();
             return true;
         });
     }
     private static final class Channel {
         final Object source, decoder, engine, capabilities;
         final long context;
+        final int rate;
+        final int[] buffers = new int[8];
+        ByteBuffer pcm;
+        int allocated;
         long sequence = -1, lastFrame = System.nanoTime();
-        Channel(Object source, Object decoder, Object engine, long context, Object capabilities) {
+        Channel(Object source, Object decoder, Object engine, long context, Object capabilities, int rate) {
             this.source = source; this.decoder = decoder; this.engine = engine; this.context = context; this.capabilities = capabilities;
+            this.rate = rate;
         }
-        void closeDecoder() {
-            try { ReflectiveApi.call(decoder, "close"); }
-            catch (RuntimeException error) { failure(error); }
+
+        void write(byte[] frame) throws ReflectiveOperationException {
+            int capacity = rate / 50 * 2;
+            if (frame.length == 0 || frame.length > capacity) return;
+            int pointer = ((Number) ReflectiveApi.call(source, "getPointer")).intValue();
+            int id;
+            int processed = (Integer) OpenAl.GET_SOURCE_INT.invoke(null, pointer, OpenAl.BUFFERS_PROCESSED);
+            if (processed > 0) {
+                id = (Integer) OpenAl.UNQUEUE.invoke(null, pointer);
+            } else if (allocated < buffers.length) {
+                id = (Integer) OpenAl.GEN_BUFFER.invoke(null);
+                if (id == 0) throw new IllegalStateException("Could not allocate an OpenAL buffer");
+                buffers[allocated++] = id;
+            } else {
+                return;
+            }
+            if (pcm == null) pcm = (ByteBuffer) OpenAl.ALLOCATE.invoke(null, capacity);
+            ((Buffer) pcm).clear();
+            pcm.put(frame);
+            ((Buffer) pcm).flip();
+            OpenAl.UPLOAD.invoke(null, id, OpenAl.MONO_16, pcm, rate);
+            OpenAl.QUEUE.invoke(null, pointer, id);
+            ReflectiveApi.call(source, "play");
         }
-        void close() { try { ReflectiveApi.call(source, "close"); } finally { closeDecoder(); } }
+
+        void freeNativeMemory() {
+            try {
+                if (pcm != null) OpenAl.FREE.invoke(null, pcm);
+            } catch (ReflectiveOperationException | RuntimeException error) {
+                failure(error);
+            } finally {
+                pcm = null;
+                try { ReflectiveApi.call(decoder, "close"); }
+                catch (RuntimeException error) { failure(error); }
+            }
+        }
+
+        void close() {
+            try {
+                if (allocated > 0) {
+                    int pointer = ((Number) ReflectiveApi.call(source, "getPointer")).intValue();
+                    ReflectiveApi.call(source, "stop");
+                    OpenAl.SET_SOURCE_INT.invoke(null, pointer, OpenAl.BUFFER, 0);
+                }
+                ReflectiveApi.call(source, "close");
+                for (int i = 0; i < allocated; i++) OpenAl.DELETE_BUFFER.invoke(null, buffers[i]);
+            } catch (ReflectiveOperationException | RuntimeException error) {
+                failure(error);
+            } finally {
+                freeNativeMemory();
+            }
+        }
+    }
+
+    private static final class OpenAl {
+        static final int MONO_16 = 0x1101;
+        static final int BUFFER = 0x1009;
+        static final int BUFFERS_PROCESSED = 0x1016;
+        private static final String AL10 = "org.lwjgl.openal.AL10";
+        private static final String MEMORY = "org.lwjgl.system.MemoryUtil";
+        static final Method GET_SOURCE_INT = method(AL10, "alGetSourcei", int.class, int.class);
+        static final Method SET_SOURCE_INT = method(AL10, "alSourcei", int.class, int.class, int.class);
+        static final Method GEN_BUFFER = method(AL10, "alGenBuffers");
+        static final Method DELETE_BUFFER = method(AL10, "alDeleteBuffers", int.class);
+        static final Method UNQUEUE = method(AL10, "alSourceUnqueueBuffers", int.class);
+        static final Method QUEUE = method(AL10, "alSourceQueueBuffers", int.class, int.class);
+        static final Method UPLOAD = method(AL10, "alBufferData", int.class, int.class, ByteBuffer.class, int.class);
+        static final Method ALLOCATE = method(MEMORY, "memAlloc", int.class);
+        static final Method FREE = method(MEMORY, "memFree", Buffer.class);
+
+        private static Method method(String owner, String name, Class<?>... types) {
+            try { return Class.forName(owner).getMethod(name, types); }
+            catch (ReflectiveOperationException error) { throw new IllegalStateException(name, error); }
+        }
     }
 }

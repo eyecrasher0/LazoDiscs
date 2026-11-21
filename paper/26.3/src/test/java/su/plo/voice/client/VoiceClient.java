@@ -24,21 +24,26 @@ public final class VoiceClient {
         private final List<Runnable> pending = new ArrayList<>();
         public void runInContext(Runnable action) { pending.add(action); }
         public long getContextPointer() { return context; }
-        public Source createSource() { Source source=new Source();sources.add(source);return source; }
+        public Source createSource() { Source source=new Source(sources.size()+1);sources.add(source);return source; }
         public void flush() { var work=List.copyOf(pending);pending.clear();work.forEach(Runnable::run); }
     }
     public static final class Source {
+        private final int pointer;
         public boolean closed, relative, looping;
         public int writes;
         public float volume, fade, distance;
         public Object position;
+        Source(int pointer) { this.pointer=pointer; }
+        public int getPointer() { return pointer; }
         public void setRelative(boolean value) { relative=value; }
         public void setLooping(boolean value) { looping=value; }
         public void setVolume(float value) { volume=value; }
         public void setPosition(Object value) { position=value; }
         public void setFadeDistance(float value) { fade=value; }
         public void setMaxDistance(float value, float factor) { distance=value; }
-        public void write(byte[] pcm) { if(closed)throw new AssertionError("Closed source written");writes++; }
-        public void close() { closed=true; }
+        public void write(byte[] pcm) { throw new AssertionError("Voice 1's allocating uploader was used"); }
+        public void play() { if(closed)throw new AssertionError("Closed source played");writes++; }
+        public void stop() {}
+        public void close() { org.lwjgl.openal.AL10.close(pointer);closed=true; }
     }
 }

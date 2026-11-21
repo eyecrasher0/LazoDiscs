@@ -12,7 +12,11 @@ public final class PlasmoVoiceBridge {
     public static final PlasmoVoiceBridge INSTANCE = new PlasmoVoiceBridge();
     private volatile Pv2Transport transport;
     private PlasmoVoiceBridge() {}
-    public void initialize(Object server, Object addon) { transport = new Pv2Transport(server, addon); }
+    public void initialize(Object server, Object addon) {
+        Pv2Transport initialized = new Pv2Transport(server, addon);
+        StreamingSession.enable();
+        transport = initialized;
+    }
     public boolean isInitialized() { return transport != null; }
     public void shutdown() { transport = null; StreamingSession.shutdown(); }
     public PlayingVoiceSource startStaticSource(ServerLevel level, BlockPos pos, CustomDiscData disc, Runnable finished) {

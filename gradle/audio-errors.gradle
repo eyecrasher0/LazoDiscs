@@ -1,5 +1,91 @@
-// One classifier/filter implementation for every mod and Bukkit release.
+buildscript {
+    repositories { mavenCentral() }
+    dependencies { classpath 'org.ow2.asm:asm:9.11' }
+}
+
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
+
 sourceSets.main.java.srcDir(file('../../common/src/main/java'))
 dependencies {
-    compileOnly(project.plugins.hasPlugin('net.neoforged.moddev') ? 'org.apache.logging.log4j:log4j-core' : 'org.apache.logging.log4j:log4j-core:2.26.1')
+    compileOnly(project.plugins.hasPlugin('net.neoforged.moddev')
+            ? 'org.apache.logging.log4j:log4j-api'
+            : 'org.apache.logging.log4j:log4j-api:2.26.1')
+    compileOnly files(configurations.shadeRuntime.filter {
+        it.name.startsWith('commons-logging-') || it.name.startsWith('slf4j-api-')
+    })
+}
+
+class AudioLoggerRedirect extends ClassVisitor {
+    private final boolean http
+
+    AudioLoggerRedirect(ClassWriter output, boolean http) {
+        super(Opcodes.ASM9, output)
+        this.http = http
+    }
+
+    @Override MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+        return new LogCalls(super.visitMethod(access, name, descriptor, signature, exceptions), http)
+    }
+
+    private static class LogCalls extends MethodVisitor {
+        private final boolean http
+
+        LogCalls(MethodVisitor delegate, boolean http) {
+            super(Opcodes.ASM9, delegate)
+            this.http = http
+        }
+
+        @Override void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
+            if (opcode == Opcodes.INVOKESTATIC &&
+                    (http ? owner.endsWith('org/apache/commons/logging/LogFactory') && name == 'getLog'
+                          : owner.endsWith('org/slf4j/LoggerFactory') && name == 'getLogger')) {
+                owner = 'com/eyecrasher/lazodiscs/voice/AudioLogs'
+            }
+            super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
+        }
+    }
+}
+
+tasks.named('shadowJar') {
+    doLast {
+        def archive = archiveFile.get().asFile.toPath()
+        def temporary = Files.createTempFile(archive.parent, 'audio-logs-', '.jar')
+        try {
+            new ZipFile(archive.toFile()).withCloseable { original ->
+                new ZipOutputStream(Files.newOutputStream(temporary)).withCloseable { output ->
+                    for (def entry : original.entries()) {
+                        def copy = new ZipEntry(entry.name)
+                        copy.time = entry.time
+                        output.putNextEntry(copy)
+                        def name = entry.name.replaceFirst(/^META-INF\/versions\/\d+\//, '')
+                        boolean http = name.startsWith('com/eyecrasher/lazodiscs/shadow/org/apache/http/')
+                        boolean audio = name.startsWith('com/sedmelluq/') || name.startsWith('dev/lavalink/youtube/')
+                        original.getInputStream(entry).withCloseable { contents ->
+                            if (name.endsWith('.class') && (http || audio)) {
+                                def reader = new ClassReader(contents)
+                                def writer = new ClassWriter(reader, 0)
+                                reader.accept(new AudioLoggerRedirect(writer, http), 0)
+                                output.write(writer.toByteArray())
+                            } else {
+                                contents.transferTo(output)
+                            }
+                        }
+                        output.closeEntry()
+                    }
+                }
+            }
+            Files.move(temporary, archive, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            Files.deleteIfExists(temporary)
+        }
+    }
 }

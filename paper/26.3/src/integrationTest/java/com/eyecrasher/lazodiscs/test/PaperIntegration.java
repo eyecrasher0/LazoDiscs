@@ -38,6 +38,19 @@ import java.util.function.BooleanSupplier;
 
 /** Runs inside a disposable real Paper server. Never shipped with LazoDiscs. */
 public final class PaperIntegration extends JavaPlugin {
+    private static final java.util.Map<String, Integer> VANILLA_SIGNALS = java.util.Map.ofEntries(
+            java.util.Map.entry("music_disc_13", 1), java.util.Map.entry("music_disc_cat", 2),
+            java.util.Map.entry("music_disc_blocks", 3), java.util.Map.entry("music_disc_chirp", 4),
+            java.util.Map.entry("music_disc_far", 5), java.util.Map.entry("music_disc_mall", 6),
+            java.util.Map.entry("music_disc_mellohi", 7), java.util.Map.entry("music_disc_stal", 8),
+            java.util.Map.entry("music_disc_bounce", 8), java.util.Map.entry("music_disc_strad", 9),
+            java.util.Map.entry("music_disc_lava_chicken", 9), java.util.Map.entry("music_disc_ward", 10),
+            java.util.Map.entry("music_disc_tears", 10), java.util.Map.entry("music_disc_11", 11),
+            java.util.Map.entry("music_disc_creator_music_box", 11), java.util.Map.entry("music_disc_wait", 12),
+            java.util.Map.entry("music_disc_creator", 12), java.util.Map.entry("music_disc_pigstep", 13),
+            java.util.Map.entry("music_disc_precipice", 13), java.util.Map.entry("music_disc_otherside", 14),
+            java.util.Map.entry("music_disc_relic", 14), java.util.Map.entry("music_disc_5", 15));
+
     private final List<String> passed = new ArrayList<>();
     private LazoDiscs plugin;
     private LazoDiscsVoiceAddon voice;
@@ -70,6 +83,7 @@ public final class PaperIntegration extends JavaPlugin {
                 "play defaults to all players");
         itemRoundTrips();
         urlPolicy();
+        persistedPolicy();
         var other =
                 new WorldCreator("lazo_other")
                         .type(WorldType.FLAT)
@@ -161,7 +175,8 @@ public final class PaperIntegration extends JavaPlugin {
                     });
             ItemStack burned = original.clone();
             var expected = disc(audio);
-            int comparator = DiscDataUtil.comparatorOutput(original);
+            Integer comparator = VANILLA_SIGNALS.get(type.getKey().getKey());
+            check(comparator != null, "vanilla comparator expectation for " + type);
             DiscDataUtil.write(burned, expected);
             check(DiscDataUtil.read(burned).orElseThrow().equals(expected), "record/read " + type);
             check(DiscDataUtil.comparatorOutput(burned) == comparator, "comparator " + type);
@@ -193,6 +208,30 @@ public final class PaperIntegration extends JavaPlugin {
                             .set(root, PersistentDataType.TAG_CONTAINER, data);
                 });
         check(DiscDataUtil.read(malformed).isEmpty(), "malformed non-finite volume ignored");
+    }
+
+    private void persistedPolicy() throws Exception {
+        Object previous = plugin.getConfig().get("playback.maxRange");
+        try {
+            plugin.getConfig().set("playback.maxRange", 128);
+            LazoDiscsConfig.load(plugin);
+            String signed = audio + "?token=portable%2Bsignature";
+            ItemStack portable = new ItemStack(Material.MUSIC_DISC_CAT);
+            DiscDataUtil.write(portable, new CustomDiscData(signed, "Portable fixture", 128, 1, UUID.randomUUID()));
+            var encoded = new org.bukkit.configuration.file.YamlConfiguration();
+            encoded.set("disc", portable);
+            String saved = encoded.saveToString();
+            plugin.getConfig().set("playback.maxRange", 32);
+            LazoDiscsConfig.load(plugin);
+            var decoded = new org.bukkit.configuration.file.YamlConfiguration();
+            decoded.loadFromString(saved);
+            CustomDiscData read = DiscDataUtil.read(decoded.getItemStack("disc")).orElseThrow();
+            check(read.range() == 32, "persisted recording obeys the current hearing cap");
+            check(read.url().equals(signed), "portable signed URL retains its complete signature");
+        } finally {
+            plugin.getConfig().set("playback.maxRange", previous);
+            LazoDiscsConfig.load(plugin);
+        }
     }
 
     private void urlPolicy() {

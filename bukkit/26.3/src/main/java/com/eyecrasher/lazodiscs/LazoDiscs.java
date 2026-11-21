@@ -15,12 +15,11 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.util.List;
 
 /** Bukkit compatibility distribution for Spigot, Purpur and region-threaded Folia. */
 public final class LazoDiscs extends JavaPlugin {
-    public static final Logger LOGGER = LoggerFactory.getLogger("LazoDiscs");
+    public static final Logger LOGGER = com.eyecrasher.lazodiscs.voice.AudioLogs.getLogger("LazoDiscs");
     private final LazoDiscsVoiceAddon voice = new LazoDiscsVoiceAddon(this);
     private JukeboxPlaybackManager playback;
     private LazoDiscsCommands commands;

@@ -77,23 +77,38 @@ def main():
 
         pv=run/'config/plasmovoice';pv.mkdir(exist_ok=True);(pv/'server.toml').write_text('[host]\nip = "127.0.0.1"\nport = 0\n')
     requested=[];cold_requested=threading.Event();cold_release=threading.Event();cold_responses=[]
+    with wave.open(io.BytesIO(audio.AudioFixture.audio)) as wav:
+        fixture_seconds=wav.getnframes()/wav.getframerate()
+        expected_timecode=round(fixture_seconds*1000)-20
+        short_pcm=wav.readframes(wav.getframerate())
+        short_format=wav.getparams()
+    short_wav=io.BytesIO()
+    with wave.open(short_wav,'wb') as wav:
+        wav.setparams(short_format)
+        wav.writeframes(short_pcm)
     class Fixture(audio.AudioFixture):
         def do_GET(self):
             requested.append(self.path)
-            if self.path=='/cold.wav':
+            path=self.path
+            if path=='/short.wav':
+                self.audio=short_wav.getvalue()
+            if path=='/cold.wav':
                 cold_requested.set()
-                if not cold_release.wait(30):self.send_error(504);return
+                if not cold_release.wait(30):
+                    self.send_error(504)
+                    return
+            if path in ('/cold.wav','/first.wav','/second.wav','/short.wav','/cancelled.wav'):
                 self.path='/test.wav'
-                try:super().do_GET()
-                finally:cold_responses.append(time.monotonic())
-            else:super().do_GET()
+            super().do_GET()
+            if path=='/cold.wav':cold_responses.append(time.monotonic())
     fixture_http=http.server.ThreadingHTTPServer(('127.0.0.1',0),Fixture);threading.Thread(target=fixture_http.serve_forever,daemon=True).start()
-    url=f'http://127.0.0.1:{fixture_http.server_port}/test.wav';disc='{url:"'+url+'",title:"Runtime fixture",range:64,volume:1.0f,id:"'+str(uuid.uuid4())+'"}'
+    cold_disc=str(uuid.uuid4())
+    url=f'http://127.0.0.1:{fixture_http.server_port}/first.wav';disc='{url:"'+url+'",title:"Runtime fixture",range:64,volume:1.0f,id:"'+str(uuid.uuid4())+'"}'
     legacy=mc.startswith(('1.16.','1.17','1.18','1.19')) or mc in ['1.20','1.20.1','1.20.2','1.20.3','1.20.4']
     item='{id:"minecraft:music_disc_cat",Count:1b,tag:{lazodiscs:'+disc+'}}' if legacy else '{id:"minecraft:music_disc_cat",count:1,components:{"minecraft:custom_data":{lazodiscs:'+disc+'}}}'
-    with wave.open(io.BytesIO(Fixture.audio)) as wav:fixture_seconds=wav.getnframes()/wav.getframerate()
-    lines=[];completed=[];ready=threading.Event();log=folder/'console.log'
-    command=[args.java,'-XX:ActiveProcessorCount=2','-Xms512M','-Xmx1536M',*launch,'--nogui']
+    lines=[];completed={};ready=threading.Event();log=folder/'console.log'
+    retired=threading.Event();barrier=threading.Event();barrier_message='LazoDiscs-smoke-'+uuid.uuid4().hex
+    command=[args.java,'-XX:ActiveProcessorCount=2','-Xms512M','-Xmx1536M','-Dlazodiscs.testPlayback=true',*launch,'--nogui']
     print('Running',platform,mc,'log:',log,flush=True)
     process=None
     try:
@@ -103,7 +118,10 @@ def main():
                 for line in process.stdout:
                     output.write(line);output.flush();lines.append(line)
                     if 'Done (' in line and 'For help' in line:ready.set()
-                    if "Finished LazoDisc 'Runtime fixture'" in line and '(track-ended)' in line:completed.append(time.monotonic())
+                    if f'LazoDiscs smoke retired {cold_disc} from empty jukebox' in line:retired.set()
+                    if '[Server] '+barrier_message in line:barrier.set()
+                    finished=re.search(r'LazoDiscs smoke completed (/\w+\.wav) at (\d+) ms',line)
+                    if finished:completed.setdefault(finished[1],[]).append(int(finished[2]))
         reader=threading.Thread(target=collect,daemon=True);reader.start()
         deadline=time.monotonic()+180
         while not ready.is_set() and process.poll() is None and time.monotonic()<deadline:ready.wait(.25)
@@ -126,20 +144,25 @@ def main():
         def assert_clean_playback():
             output=''.join(lines[playback_start_line:])
             if any(token in output for token in failure_tokens):raise RuntimeError(f'Playback emitted a runtime error: {log}')
-        def wait_for_completion(count,started):
-            deadline=time.monotonic()+max(30,fixture_seconds+15)
-            while len(completed)<count and process.poll() is None and time.monotonic()<deadline:
+        def wait_for_completion(path):
+            deadline=time.monotonic()+30
+            while path not in completed and process.poll() is None and time.monotonic()<deadline:
                 assert_clean_playback();time.sleep(.05)
             assert_clean_playback()
-            if len(completed)<count:raise RuntimeError(f'Decoded playback did not complete: {log}')
-            if completed[count-1]-started<fixture_seconds*.75:raise RuntimeError(f'Playback ended before the fixture could be heard: {log}')
+            if path not in completed:raise RuntimeError(f'Decoded playback did not complete for {path}: {log}')
+            return completed[path][0]
+        def require_full_playback(path):
+            last=wait_for_completion(path)
+            if last!=expected_timecode:
+                raise RuntimeError(f'Unexpected final decoded timecode for {path}: {last}, expected {expected_timecode}')
         send('forceload add 0 0')
         time.sleep(1)
         send('setblock 0 80 0 minecraft:jukebox')
         # The very first decoder must be cancelled cold, not after a successful track
         # has already loaded every codec/control class from Forge's shared archive.
-        cold_item=item.replace('/test.wav','/cold.wav').replace('Runtime fixture','Cold cancelled fixture')
-        cold_started=time.monotonic();send('data merge block 0 80 0 {RecordItem:'+cold_item+'}')
+        cold_item=item.replace('/first.wav','/cold.wav').replace('Runtime fixture','Cold cancelled fixture')
+        cold_item=re.sub(r'id:"[0-9a-f-]{36}"',f'id:"{cold_disc}"',cold_item)
+        send('data merge block 0 80 0 {RecordItem:'+cold_item+'}')
         deadline=time.monotonic()+30
         while not cold_requested.is_set() and process.poll() is None and time.monotonic()<deadline:
             assert_clean_playback();time.sleep(.05)
@@ -147,8 +170,13 @@ def main():
         # Old jukebox NBT readers retain their existing item if RecordItem is absent.
         # An explicit empty compound makes every generation actually clear the slot.
         send('data modify block 0 80 0 RecordItem set value {}')
-        # Allow the server to process removal while the resolver is still held in HTTP.
-        time.sleep(.2);cold_cancelled=time.monotonic();cold_release.set()
+        send('say '+barrier_message)
+        deadline=time.monotonic()+10
+        while not (retired.is_set() and barrier.is_set()) and process.poll() is None and time.monotonic()<deadline:
+            assert_clean_playback();time.sleep(.02)
+        if not retired.is_set() or not barrier.is_set() or cold_responses:
+            raise RuntimeError(f'Server did not acknowledge retiring the held source from an empty jukebox: {log}')
+        cold_release.set()
         deadline=time.monotonic()+30
         while len(cold_responses)<2 and process.poll() is None and time.monotonic()<deadline:
             assert_clean_playback();time.sleep(.05)
@@ -157,28 +185,32 @@ def main():
         # warm the class archive and hide an interruption-induced read failure.
         settle=time.monotonic()+2
         while time.monotonic()<settle:assert_clean_playback();time.sleep(.05)
-        first_started=time.monotonic();send('data merge block 0 80 0 {RecordItem:'+item+'}')
-        deadline=time.monotonic()+50
-        while '/test.wav' not in requested and process.poll() is None and time.monotonic()<deadline:
-            assert_clean_playback();time.sleep(.1)
-        if '/test.wav' not in requested:raise RuntimeError(f'Recorded item did not request local audio: {log}')
-        wait_for_completion(1,first_started)
-        cancelled=item.replace('Runtime fixture','Cancelled fixture')
+        send('data merge block 0 80 0 {RecordItem:'+item+'}')
+        require_full_playback('/first.wav')
+        cancelled=item.replace('/first.wav','/cancelled.wav').replace('Runtime fixture','Cancelled fixture')
         send('data merge block 0 80 0 {RecordItem:'+cancelled+'}')
         send('data modify block 0 80 0 RecordItem set value {}')
-        second_started=time.monotonic();send('data merge block 0 80 0 {RecordItem:'+item+'}')
-        wait_for_completion(2,second_started)
+        second=item.replace('/first.wav','/second.wav')
+        send('data merge block 0 80 0 {RecordItem:'+second+'}')
+        require_full_playback('/second.wav')
+        short=item.replace('/first.wav','/short.wav')
+        send('data modify block 0 80 0 RecordItem set value {}')
+        send('data merge block 0 80 0 {RecordItem:'+short+'}')
+        if wait_for_completion('/short.wav')!=980:
+            raise RuntimeError(f'Wrong final timecode for the one-second audio fixture: {log}')
         send('data get block 0 80 0');time.sleep(1);send('stop')
         code=process.wait(timeout=60);reader.join(timeout=5)
         if code:raise RuntimeError(f'Mod server exited {code}: {log}')
         assert_clean_playback()
+        if '/cold.wav' in completed or any(completed.get(path)!=[expected_timecode] for path in ('/first.wav','/second.wav')):
+            raise RuntimeError(f'Expected two distinct full playbacks and no completion of the cold source: {log}')
         if hashlib.sha256(Path(__file__).read_bytes()).hexdigest()!=HARNESS_SHA256:raise RuntimeError('Harness changed during verification; rerun')
-        result={'platform':platform,'minecraft':mc,'sha256':digest,'voice':voice['version'],'fresh_world':world,'ready':True,'audio_requests':requested,
+        result={'platform':platform,'minecraft':mc,'sha256':digest,'voice':voice['version'],'voice_sha512':hashlib.sha512((mods/'PlasmoVoice.jar').read_bytes()).hexdigest(),'fresh_world':world,'ready':True,'audio_requests':requested,
                 'harness_sha256':HARNESS_SHA256,'console_sha256':hashlib.sha256(log.read_bytes()).hexdigest(),'playback_start_line':playback_start_line,
-                'startup_external_error_events':external_startup_errors,'cold_cancelled':cold_started<cold_cancelled<first_started,'cold_requests':requested.count('/cold.wav'),
-                'completed_playbacks':len(completed),'fixture_seconds':fixture_seconds,'first_playback_seconds':completed[0]-first_started,
-                'second_playback_seconds':completed[1]-second_started,'exit':code,'log':str(log),
-                'scope':'Real final-JAR loader startup, in-flight cancellation of the first cold decoder before successful playback, two timed complete decoded jukebox playbacks with rapid replacement/extraction, no plugin/audio startup or playback errors, and clean shutdown; no client listening assertion'}
+                'startup_external_error_events':external_startup_errors,'cold_cancelled':True,'cold_requests':requested.count('/cold.wav'),
+                'cold_disc':cold_disc,'command_barrier':barrier_message,'completed_playbacks':2,'fixture_seconds':fixture_seconds,
+                'expected_timecode_ms':expected_timecode,'final_timecodes_ms':completed,'exit':code,'log':str(log),
+                'scope':'Real final-JAR loader startup, observed empty-slot retirement of a held cold source, two natural full decoded playbacks with rapid replacement/extraction, one short-track duration control, and clean shutdown'}
         (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
     finally:
         cold_release.set()

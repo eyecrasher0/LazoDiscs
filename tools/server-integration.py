@@ -50,6 +50,9 @@ def main():
     tested_hash=hashlib.sha256((plugins/'LazoDiscs.jar').read_bytes()).hexdigest()
     tested_fixture_hash=hashlib.sha256((plugins/'LazoDiscsIntegration.jar').read_bytes()).hexdigest()
     shutil.copy2(server_jar,run/'server.jar')
+    tested_server_hash=hashlib.sha256((run/'server.jar').read_bytes()).hexdigest()
+    tested_voice_hash=hashlib.sha512((plugins/'PlasmoVoice.jar').read_bytes()).hexdigest()
+    if tested_voice_hash!=voice['sha512']:raise RuntimeError('Staged Voice JAR failed its pinned checksum')
     for name in ['cache','libraries','versions']:
         if (cache/name).exists():
             if fast_root:shutil.copytree(cache/name,run/name)
@@ -87,7 +90,7 @@ def main():
         if code!=0 or not result.is_file(): raise RuntimeError(f'Server exit {code}, no fixture result: {run / "console.log"}')
         report=json.loads(result.read_text())
         if hashlib.sha256(release.read_bytes()).hexdigest()!=tested_hash: raise RuntimeError('Release JAR changed during integration')
-        report.update(platform=args.platform,minecraft=args.minecraft,build=pin['build'],voice=voice['version'],jar_sha256=tested_hash,fixture_sha256=tested_fixture_hash,server_sha256=hashlib.sha256(server_jar.read_bytes()).hexdigest(),log=str(saved_run/'console.log'))
+        report.update(platform=args.platform,minecraft=args.minecraft,build=pin['build'],voice=voice['version'],jar_sha256=tested_hash,fixture_sha256=tested_fixture_hash,server_sha256=tested_server_hash,voice_sha512=tested_voice_hash,log=str(saved_run/'console.log'))
         (cache/'result.json').write_text(json.dumps(report,indent=2)+'\n'); print(json.dumps(report,indent=2))
         if report['failure'] is not None: raise SystemExit(1)
     finally:

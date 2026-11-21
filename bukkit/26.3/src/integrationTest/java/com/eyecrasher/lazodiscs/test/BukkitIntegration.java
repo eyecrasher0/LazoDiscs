@@ -40,6 +40,18 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /** Executes public commands, item contracts and native world/source lifecycles in a real server. */
 public final class BukkitIntegration extends JavaPlugin {
+    private static final Map<String, Integer> VANILLA_SIGNALS = Map.ofEntries(
+            Map.entry("music_disc_13", 1), Map.entry("music_disc_cat", 2),
+            Map.entry("music_disc_blocks", 3), Map.entry("music_disc_chirp", 4),
+            Map.entry("music_disc_far", 5), Map.entry("music_disc_mall", 6),
+            Map.entry("music_disc_mellohi", 7), Map.entry("music_disc_stal", 8),
+            Map.entry("music_disc_bounce", 8), Map.entry("music_disc_strad", 9),
+            Map.entry("music_disc_lava_chicken", 9), Map.entry("music_disc_ward", 10),
+            Map.entry("music_disc_tears", 10), Map.entry("music_disc_11", 11),
+            Map.entry("music_disc_creator_music_box", 11), Map.entry("music_disc_wait", 12),
+            Map.entry("music_disc_creator", 12), Map.entry("music_disc_pigstep", 13),
+            Map.entry("music_disc_precipice", 13), Map.entry("music_disc_otherside", 14),
+            Map.entry("music_disc_relic", 14), Map.entry("music_disc_5", 15));
     private Scheduling scheduler;
     private LazoDiscs plugin;
     private LazoDiscsVoiceAddon voice;
@@ -87,7 +99,8 @@ public final class BukkitIntegration extends JavaPlugin {
             original.setItemMeta(meta);
             var recorded = original.clone();
             var data = disc(audio);
-            int comparator = DiscDataUtil.comparatorOutput(original);
+            Integer comparator = VANILLA_SIGNALS.get(type.getKey().getKey());
+            check(comparator != null, "vanilla comparator expectation for " + type);
             DiscDataUtil.write(recorded, data);
             check(DiscDataUtil.read(recorded).orElseThrow().equals(data), "record/read " + type);
             check(DiscDataUtil.comparatorOutput(recorded) == comparator, "comparator " + type);
@@ -103,6 +116,7 @@ public final class BukkitIntegration extends JavaPlugin {
             check(restored.equals(original), "erase preserves original name/lore/foreign data " + type);
             discs++;
         }
+        persistedPolicy();
         check(discs >= 13, "all discs in this server version covered: " + discs);
         if (field(voice, "transport") instanceof Pv2Transport transport) {
             var entity = world.spawnEntity(location.clone().add(2,0,0), org.bukkit.entity.EntityType.ARMOR_STAND);
@@ -131,6 +145,30 @@ public final class BukkitIntegration extends JavaPlugin {
             waitRegion("track finishes and removes audio source", () -> activeCount() == 0 && streamCount() == 0, 220, this::cancelLoad);
         });
     }
+    private void persistedPolicy() throws Exception {
+        Object previous = plugin.getConfig().get("playback.maxRange");
+        try {
+            plugin.getConfig().set("playback.maxRange", 128);
+            LazoDiscsConfig.load(plugin);
+            String signed = audio + "?token=portable%2Bsignature";
+            ItemStack portable = new ItemStack(Material.MUSIC_DISC_CAT);
+            DiscDataUtil.write(portable, new CustomDiscData(signed, "Portable fixture", 128, 1, UUID.randomUUID()));
+            var encoded = new org.bukkit.configuration.file.YamlConfiguration();
+            encoded.set("disc", portable);
+            String saved = encoded.saveToString();
+            plugin.getConfig().set("playback.maxRange", 32);
+            LazoDiscsConfig.load(plugin);
+            var decoded = new org.bukkit.configuration.file.YamlConfiguration();
+            decoded.loadFromString(saved);
+            CustomDiscData read = DiscDataUtil.read(decoded.getItemStack("disc")).orElseThrow();
+            check(read.range() == 32, "persisted recording obeys the current hearing cap");
+            check(read.url().equals(signed), "portable signed URL retains its complete signature");
+        } finally {
+            plugin.getConfig().set("playback.maxRange", previous);
+            LazoDiscsConfig.load(plugin);
+        }
+    }
+
     private void setupPlayer() {
         PlayerInventory inventory = (PlayerInventory) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{PlayerInventory.class}, (proxy, method, args) -> switch (method.getName()) {
             case "getItemInMainHand" -> held;

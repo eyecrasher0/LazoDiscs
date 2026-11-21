@@ -3,6 +3,15 @@
 import argparse,concurrent.futures,hashlib,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+
+def current_artifacts(prior,server,server_pin,voice,voice_pin):
+    if server_pin is None or not server.is_file() or not voice.is_file():return False
+    server_bytes=server.read_bytes()
+    return (prior.get('build')==server_pin['build']
+            and hashlib.new(server_pin['algorithm'],server_bytes).hexdigest()==server_pin['checksum']
+            and hashlib.sha256(server_bytes).hexdigest()==prior.get('server_sha256')
+            and hashlib.sha512(voice.read_bytes()).hexdigest()==voice_pin['sha512']==prior.get('voice_sha512'))
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output-root',type=Path,default=ROOT/'build-matrix')
@@ -13,12 +22,17 @@ def main():
     args=p.parse_args();out=args.output_root.resolve();work=args.work_root.resolve()
     release=out/'bukkit/26.3/libs/lazodiscs-bukkit-1.0.8.jar';fixture=release.with_name('lazodiscs-bukkit-integration.jar')
     sha=hashlib.sha256(release.read_bytes()).hexdigest();fixture_sha=hashlib.sha256(fixture.read_bytes()).hexdigest()
+    server_pins=json.loads((ROOT/'server-builds.json').read_text())
     rows=[r for r in json.loads((ROOT/'compatibility.json').read_text())['entries'] if r['platform'] in args.platform and (not args.versions or r['minecraft'] in args.versions)]
     def run(row):
         platform,mc=row['platform'],row['minecraft'];result=work/platform/mc/'result.json'
         if args.resume and result.exists():
             prior=json.loads(result.read_text())
-            if prior.get('failure') is None and prior.get('jar_sha256')==sha and prior.get('fixture_sha256')==fixture_sha and prior.get('voice')==row['voice']['version']:
+            voice=row['voice']
+            cached_voice=work/'.voice'/(voice['sha512']+'.jar')
+            if ('failure' in prior and prior['failure'] is None and prior.get('jar_sha256')==sha
+                    and prior.get('fixture_sha256')==fixture_sha and prior.get('voice')==voice['version']
+                    and current_artifacts(prior,result.with_name('server.jar'),server_pins.get(f'{platform}/{mc}'),cached_voice,voice)):
                 print(f'SKIP verified {platform}/{mc}',flush=True);return prior
         log=out/'logs/server'/f'{platform}-{mc}.log';log.parent.mkdir(parents=True,exist_ok=True)
         command=[sys.executable,str(ROOT/'tools/server-integration.py'),'--platform',platform,'--minecraft',mc,'--java',getattr(args,'java'+str(row['java'])),'--output-root',str(out),'--work-root',str(work)]

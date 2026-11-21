@@ -53,7 +53,7 @@ public final class DiscDataUtil {
                     tag.getFloat(VOLUME_KEY)
                             .orElse(LazoDiscsConfig.DEFAULT_VOLUME.get().floatValue());
             UUID id = UUID.fromString(tag.getString(ID_KEY).orElse(""));
-            return Optional.of(new CustomDiscData(url, title, range, volume, id));
+            return Optional.of(new CustomDiscData(url, title, clampRange(range), volume, id));
         } catch (Exception ignored) {
             return Optional.empty();
         }

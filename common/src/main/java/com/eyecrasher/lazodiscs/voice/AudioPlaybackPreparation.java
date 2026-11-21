@@ -4,6 +4,7 @@ import com.sedmelluq.discord.lavaplayer.player.AudioPlayer;
 import com.sedmelluq.discord.lavaplayer.player.event.AudioEventAdapter;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import com.sedmelluq.discord.lavaplayer.track.AudioTrackEndReason;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrackState;
 import com.sedmelluq.discord.lavaplayer.track.InternalAudioTrack;
 import com.sedmelluq.discord.lavaplayer.track.playback.AudioTrackExecutor;
@@ -21,6 +22,13 @@ public final class AudioPlaybackPreparation {
         FriendlyException[] failure = {null};
         boolean[] ready = {false};
         AudioEventAdapter listener = new AudioEventAdapter() {
+            @Override public void onTrackEnd(AudioPlayer source, AudioTrack ended, AudioTrackEndReason reason) {
+                if (!PlaybackProbe.ENABLED || reason != AudioTrackEndReason.FINISHED) return;
+                synchronized (gate) {
+                    if (failure[0] == null) PlaybackProbe.completed(ended);
+                }
+            }
+
             @Override public void onTrackException(AudioPlayer source, AudioTrack failedTrack, FriendlyException error) {
                 boolean notify;
                 synchronized (gate) {
@@ -73,7 +81,7 @@ public final class AudioPlaybackPreparation {
             if (!prepared || interrupted) {
                 player.removeListener(listener);
                 player.destroy();
-            } else if (playbackFailure == null) {
+            } else if (playbackFailure == null && !PlaybackProbe.ENABLED) {
                 player.removeListener(listener);
             }
         }

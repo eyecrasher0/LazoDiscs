@@ -27,8 +27,8 @@ PV = {
         "d9e21e86e52454833f6c22e7f20268c585f5ddde3e8d78ed6480668aed478e021d4e9726baf1d56e755c425885403e011f1db434b3ae1049f9daed7c0da34014",
     ),
     "beta": (
-        "https://cdn.modrinth.com/data/1bZhdhsH/versions/xWPSi9tp/PlasmoVoice-Paper-2.2.0-beta.3.jar",
-        "c10c6cf72e3594de6d436422fb0f29e31dcfd57d4e91f7d454c5237877bd3e85d2e03de5fb106bbfa60c448e3472aa6253bfd13d448aaa1ad6193c0dfc40cbd7",
+        "https://cdn.modrinth.com/data/1bZhdhsH/versions/IYnBidxv/PlasmoVoice-Paper-2.2.0-beta.4.jar",
+        "6c61d3a96c63db6bb889a87086d7d9bb9bbe11c02e9091e5546160009f717d0d54dfcaf3de36ffbcc14bfdb0642178c56af9dc502817192a86023f334410fcb6",
     ),
 }
 

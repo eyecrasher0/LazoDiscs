@@ -4,6 +4,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.lwjgl.openal.AL10;
+import org.lwjgl.system.MemoryUtil;
 import su.plo.voice.client.VoiceClient;
 import su.plo.voice.client.sound.opus.OpusDecoder;
 import static org.junit.jupiter.api.Assertions.*;
@@ -14,6 +16,9 @@ class LegacyClientAudioTest {
     @BeforeEach void setup() {
         LegacyClientAudio.prune(false);engine.flush();engine.sources.clear();
         engine.context=1;
+        AL10.resetContext();
+        AL10.allocations=0;AL10.deletions=0;AL10.processed=false;
+        MemoryUtil.allocations=0;
         VoiceClient.CONFIG.voiceVolume.value=1.0;VoiceClient.CONFIG.speakerMuted.value=false;
         OpusDecoder.opened=0;OpusDecoder.closed=0;
     }
@@ -53,15 +58,37 @@ class LegacyClientAudioTest {
         assertEquals(32,engine.sources.size());assertEquals(32,OpusDecoder.opened);
         LegacyClientAudio.prune(false);engine.flush();assertEquals(32,OpusDecoder.closed);
     }
+    @Test void stalledAndPlayingSourcesReuseTheirNativeBuffers() {
+        UUID id=UUID.randomUUID();
+        for(int i=0;i<100;i++){accept(frame(id,i));engine.flush();}
+        assertEquals(8,AL10.allocations);
+        assertEquals(1,MemoryUtil.allocations);
+        assertEquals(1,MemoryUtil.LIVE.size());
+        AL10.processed=true;
+        for(int i=100;i<2100;i++){accept(frame(id,i));engine.flush();}
+        assertEquals(2008,engine.sources.get(0).writes);
+        assertEquals(8,AL10.allocations);
+        assertEquals(1,MemoryUtil.allocations);
+        accept(LegacyAudioPacket.stop(id));engine.flush();
+        assertEquals(8,AL10.deletions);
+        assertTrue(AL10.buffers.isEmpty());
+        assertTrue(MemoryUtil.LIVE.isEmpty());
+    }
     @Test void restartingVoiceSoundContextRecreatesSourcesWithoutDeletingReusedIds() {
         UUID id=UUID.randomUUID();accept(frame(id,0));engine.flush();
         var previous=engine.sources.get(0);
+        AL10.resetContext();
+        int unrelated=AL10.alGenBuffers();
         org.lwjgl.openal.AL.capabilities=new Object();accept(frame(id,1));engine.flush();
         assertEquals(2,engine.sources.size());assertEquals(1,previous.writes);
         assertFalse(previous.closed,"The destroyed context's source ID can belong to another sound now");
+        assertTrue(AL10.buffers.contains(unrelated));
+        assertEquals(0,AL10.deletions);
+        assertEquals(1,MemoryUtil.LIVE.size());
         assertEquals(1,engine.sources.get(1).writes);assertEquals(1,OpusDecoder.closed);
         engine.context=0;LegacyClientAudio.prune(true);engine.flush();
         assertEquals(2,OpusDecoder.closed);
+        assertTrue(MemoryUtil.LIVE.isEmpty());
         accept(frame(id,2));engine.flush();assertEquals(2,engine.sources.size());
     }
 }

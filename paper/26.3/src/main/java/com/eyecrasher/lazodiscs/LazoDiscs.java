@@ -13,14 +13,13 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.IllegalPluginAccessException;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import su.plo.voice.api.server.PlasmoVoiceServer;
 
 import java.util.List;
 
 public final class LazoDiscs extends JavaPlugin {
-    public static final Logger LOGGER = LoggerFactory.getLogger("LazoDiscs");
+    public static final Logger LOGGER = com.eyecrasher.lazodiscs.voice.AudioLogs.getLogger("LazoDiscs");
     private final LazoDiscsVoiceAddon voice = new LazoDiscsVoiceAddon(this);
     private JukeboxPlaybackManager playback;
     private LazoDiscsCommands commands;

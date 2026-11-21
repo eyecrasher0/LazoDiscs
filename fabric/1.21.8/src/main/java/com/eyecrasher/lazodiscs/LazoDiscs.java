@@ -13,11 +13,10 @@ import net.fabricmc.api.ModInitializer;
 import net.minecraft.server.MinecraftServer;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class LazoDiscs implements ModInitializer {
     public static final String MOD_ID = "lazodiscs";
-    public static final Logger LOGGER = LoggerFactory.getLogger("LazoDiscs");
+    public static final Logger LOGGER = com.eyecrasher.lazodiscs.voice.AudioLogs.getLogger("LazoDiscs");
 
     private static volatile MinecraftServer currentServer;
 

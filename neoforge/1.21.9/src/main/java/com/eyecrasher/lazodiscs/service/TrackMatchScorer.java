@@ -19,9 +19,7 @@ public final class TrackMatchScorer {
                                 ""));
         String actual = normalize(rawTitle);
         if (expected.isBlank() || actual.isBlank()) return false;
-        if ((" " + actual + " ").contains(" " + expected + " ")) return true;
-        List<String> words = meaningfulWords(expected);
-        return !words.isEmpty() && List.of(actual.split(" ")).containsAll(words);
+        return (" " + actual + " ").contains(" " + expected + " ");
     }
 
     public static int score(

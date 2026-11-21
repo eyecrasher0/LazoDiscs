@@ -2,10 +2,9 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { delimiter, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const release = {mod_id:'lazodiscs'};
 const readJson = path => JSON.parse(readFileSync(path,'utf8'));
 const outputRoot = process.env.LAZO_OUTPUT_ROOT ?? join(root,'build-matrix');
 const activeTargets = matrix => matrix.entries.filter(t=>['fabric','forge','neoforge'].includes(t.platform)).map(t=>({
@@ -15,9 +14,6 @@ const activeTargets = matrix => matrix.entries.filter(t=>['fabric','forge','neof
 
 // Check actual runtime JARs, not just the newer Maven compile-time API. This catches
 // missing methods on older stable PV releases without launching Minecraft.
-const prefix = release.mod_id === 'lazoboombox'
-  ? /^(?:su\/plo\/(?:voice|slib|lib)\/|com\/eyecrasher\/lazodiscs\/(?!shadow\/))/
-  : /^su\/plo\/(?:voice|slib|lib)\//;
 if (process.argv[2] === '--self-test') {
   assert.equal(process.argv.length, 3, 'Usage: node tools/verify-plasmo-linkage.mjs --self-test');
   selfTest();
@@ -100,12 +96,11 @@ function references(output) {
   const result = new Map();
   for (const line of output.split('\n')) {
     const match = line.match(
-      /^\s*\d+:\s+(invoke(?:static|virtual|special|interface)|(?:get|put)(?:static|field))\s+#\d+.*\/\/ (?:InterfaceMethod|Method|Field) ((?:su\/plo\/(?:voice|slib|lib)\/|com\/eyecrasher\/lazodiscs\/)[^.\s]+)\."?([^:\"]+)"?:(\S+)/)
+      /^\s*\d+:\s+(invoke(?:static|virtual|special|interface)|(?:get|put)(?:static|field))\s+#\d+.*\/\/ (?:InterfaceMethod|Method|Field) (su\/plo\/(?:voice|slib|lib)\/[^.\s]+)\."?([^:\"]+)"?:(\S+)/)
       ?? line.match(
-        /\bREF_(invokeStatic|invokeVirtual|invokeSpecial|invokeInterface|newInvokeSpecial|getStatic|putStatic|getField|putField)\s+((?:su\/plo\/(?:voice|slib|lib)\/|com\/eyecrasher\/lazodiscs\/)[^.\s]+)\."?([^:\"]+)"?:(\S+)/);
+        /\bREF_(invokeStatic|invokeVirtual|invokeSpecial|invokeInterface|newInvokeSpecial|getStatic|putStatic|getField|putField)\s+(su\/plo\/(?:voice|slib|lib)\/[^.\s]+)\."?([^:\"]+)"?:(\S+)/);
     if (!match) continue;
     const [, instruction, owner, name, descriptor] = match;
-    if (!prefix.test(owner)) continue;
     const opcode = instruction.toLowerCase();
     const key = `${owner}.${name}:${descriptor}`;
     const reference = { owner, name, descriptor, static: opcode.endsWith('static'),
@@ -226,11 +221,11 @@ for (const target of targets) {
     const version = readFileSync(join(directory, 'build.gradle'), 'utf8')
       .match(/^version = '([^']+)'/m)?.[1];
     assert.ok(version, `No build version for ${name}`);
-    const artifact = join(outputRoot, 'release', `${release.mod_id}-${target.loader}-${version}.jar`);
+    const artifact = join(outputRoot, 'release', `lazodiscs-${target.loader}-${version}.jar`);
     assert.ok(existsSync(artifact), `Build the final JAR first: ${artifact}`);
     const before = createHash('sha256').update(readFileSync(artifact)).digest('hex');
     const classes = command('unzip', ['-Z1', artifact]).trim().split(/\r?\n/)
-      .filter(entry => entry.startsWith(`com/eyecrasher/${release.mod_id}/`) &&
+      .filter(entry => entry.startsWith('com/eyecrasher/lazodiscs/') &&
         !entry.includes('/shadow/') && entry.endsWith('.class'))
       .map(entry => entry.slice(0, -6).replaceAll('/', '.'));
     assert.ok(classes.length, 'No mod-owned classes found');
@@ -245,29 +240,13 @@ for (const target of targets) {
     assert.ok(used.size, 'No PV calls detected; ineffective verification');
     const pv = await getPlasmoVoice(target);
     const entries = new Set(command('unzip', ['-Z1', pv]).trim().split(/\r?\n/));
-    let apiClasspath = pv;
-    let discs, discsBefore;
-    if (release.mod_id === 'lazoboombox') {
-      assert.ok(!command('unzip', ['-Z1', artifact]).split(/\r?\n/)
-        .some(entry => entry.startsWith('com/eyecrasher/lazodiscs/')), 'Compile-only Discs stubs leaked into Boombox');
-      const discsRoot = process.env.LAZO_DISCS_ROOT ?? join(dirname(root), 'LazoDiscs');
-      const discsDirectory = join(discsRoot, target.loader, target.minecraft);
-      const discsVersion = readFileSync(join(discsDirectory, 'build.gradle'), 'utf8')
-        .match(/^version = '([^']+)'/m)?.[1];
-      assert.ok(discsVersion, 'Missing matching LazoDiscs build version');
-      discs = join(discsDirectory, 'build/libs', `lazodiscs-${target.loader}-${discsVersion}.jar`);
-      assert.ok(existsSync(discs), 'Build the actual matching LazoDiscs JAR first');
-      discsBefore = createHash('sha256').update(readFileSync(discs)).digest('hex');
-      apiClasspath += delimiter + discs;
-      for (const entry of command('unzip', ['-Z1', discs]).trim().split(/\r?\n/)) entries.add(entry);
-    }
     const legacyApi = /-2\.0\./.test(target.plasmo_voice.version);
     const addonContract = 'su/plo/voice/api/addon/AddonInitializer';
     const providerContract = 'su/plo/voice/api/server/audio/provider/AudioFrameProvider';
     const contracts = [addonContract, 'su/plo/voice/api/addon/annotation/Addon'];
     if (!legacyApi) contracts.push('su/plo/voice/api/addon/InjectPlasmoVoice', providerContract);
     const cache = new Map();
-    loadApi(apiClasspath, [...used.values()].map(reference => reference.owner).concat(contracts), entries, cache);
+    loadApi(pv, [...used.values()].map(reference => reference.owner).concat(contracts), entries, cache);
     for (const [key, reference] of used) {
       const actual = resolve(reference.owner, reference.name, reference.descriptor, cache);
       assert.ok(actual, `Missing stable PV member: ${key}`);
@@ -290,11 +269,8 @@ for (const target of targets) {
     }
     assert.equal(createHash('sha256').update(readFileSync(artifact)).digest('hex'), before,
       'Artifact changed during verification');
-    if (discs) assert.equal(createHash('sha256').update(readFileSync(discs)).digest('hex'), discsBefore,
-      'Matching Discs artifact changed during verification');
     results.push({ target: name, result: 'pass', sha256: before, pv: target.plasmo_voice.version,
-      pv_sha512: target.plasmo_voice.sha512, member_references: used.size,
-      ...(discs ? { discs_sha256: discsBefore } : {}) });
+      pv_sha512: target.plasmo_voice.sha512, member_references: used.size });
     console.log(`PASS ${name}: ${used.size} member references against stable ${target.plasmo_voice.version}`);
   } catch (error) {
     results.push({ target: name, result: 'fail', error: error.message });
@@ -306,7 +282,7 @@ mkdirSync(output, { recursive: true });
 const selection = [loader, minecraft].filter(Boolean).join('-') || 'all';
 writeFileSync(join(output, `plasmo-linkage-${selection}.json`), JSON.stringify({
   checked_at: new Date().toISOString(),
-  scope: 'PV/SLib members, method handles, abstract addon/provider contracts and Boombox-to-Discs public members; not a full JVM linker, reflective API check, or live game test',
+  scope: 'PV/SLib members, method handles, abstract addon/provider contracts; not a full JVM linker, reflective API check, or live game test',
   results,
 }, null, 2) + '\n');
 const passed = results.filter(result => result.result === 'pass').length;
