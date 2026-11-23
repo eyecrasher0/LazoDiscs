@@ -32,26 +32,24 @@ Use `search` for a song name and `burn` for a link. Spotify support is for indiv
 
 - **Fabric / Forge / NeoForge:** install the file for your exact Minecraft version and loader. Fabric also needs Fabric API.
 - **Paper:** prefer the native Paper file for your exact version. Keep that distribution when upgrading an existing native Paper installation.
-- **Spigot / Purpur / Folia and additional Paper versions:** install `lazodiscs-bukkit-1.0.8.jar` in `plugins`. Install only one LazoDiscs plugin. Configuration is in `plugins/LazoDiscs/config.yml`; access uses Bukkit permissions.
+- **Spigot / Purpur / Folia and additional Paper versions:** install `lazodiscs-bukkit-<version>.jar` in `plugins`. Install only one LazoDiscs plugin. Configuration is in `plugins/LazoDiscs/config.yml`; access uses Bukkit permissions.
 - **Voice 2:** listeners need Plasmo Voice. LazoDiscs is optional on clients and improves recorded-disc tooltips.
 - **Voice 1:** listeners need the matching client LazoDiscs mod or the Voice 1 client helper described in the compatibility guide. Use Voice 1 only where the guide selects it. Music starts after the official Voice session connects.
 - **Singleplayer:** install LazoDiscs and its matching dependencies in the Minecraft instance.
 
-[The full compatibility and installation guide](docs/compatibility-1.0.8.md) links the exact official Voice dependency for each platform/version. It covers **35 Fabric, 16 Forge, 17 NeoForge, 32 Paper, 35 Spigot, 30 Purpur and 13 Folia targets**. Voice 2 is preferred; Voice 1 supplies older targets and stock Bukkit 1.16.5, whose JVM limit prevents the official Voice 2 plugin from starting.
+The [release notes](https://github.com/eyecrasher0/LazoDiscs/releases) link the compatibility guide for each release. Use it to match your Minecraft version and platform with the official Plasmo Voice build and Java runtime.
 
 LazoBoombox has different requirements: if you use that add-on, install LazoBoombox, LazoDiscs, and Plasmo Voice on both the server and clients.
 
-## Supported builds
+## Compatibility notes
 
-LazoDiscs **1.0.8** covers the compatible versions from Minecraft 1.16.5 to 26.3, including archived stable Voice 2.0/2.1 releases and Voice 1 targets. The [complete table](docs/compatibility-1.0.8.md) lists every patch version and platform separately. Minecraft 1.7.10, 1.8.9 and 1.12.2 have no official Plasmo Voice release and are excluded.
-
-The YouTube sign-in refusal now gives players a short English message and emits a concise console warning. Other failures keep their diagnostic details. Dependency updates retain the Java 8/16 compatibility needed by older mod builds.
+Use Voice 2 where the compatibility guide lists it. Some older server builds use Voice 1. If YouTube requires a sign-in, try another link.
 
 Signed links remain intact on discs. Access cookies are isolated per recording load and are not saved on discs. Spotify matching requires equal song titles after known display labels are removed; a different song with a longer title is rejected.
 
 Experimental playback on Sable / Create Aeronautics moving platforms is available through the server configuration and is disabled by default. It requires a compatible version of the platform mod.
 
-[Modrinth](https://modrinth.com/mod/lazodiscs) · [CurseForge](https://www.curseforge.com/minecraft/mc-mods/lazodiscs) · [GitHub releases](https://github.com/eyecrasher0/LazoDiscs/releases) · [Report a bug](https://github.com/eyecrasher0/LazoDiscs/issues)
+[Modrinth](https://modrinth.com/mod/lazodiscs/versions) · [CurseForge Mods](https://www.curseforge.com/minecraft/mc-mods/lazodiscs/files) · [CurseForge Plugins](https://www.curseforge.com/minecraft/bukkit-plugins/lazodiscs/files) · [GitHub releases](https://github.com/eyecrasher0/LazoDiscs/releases) · [Report a bug](https://github.com/eyecrasher0/LazoDiscs/issues)
 
 ---
 
@@ -87,23 +85,21 @@ LazoDiscs позволяет записать свою музыку на обы�
 
 - **Fabric / Forge / NeoForge:** выбери файл для точной версии Minecraft и загрузчика. Для Fabric также нужен Fabric API.
 - **Paper:** используй нативную Paper-сборку для своей версии, если она есть. При обновлении существующей нативной установки сохрани этот вариант.
-- **Spigot / Purpur / Folia и дополнительные версии Paper:** установи `lazodiscs-bukkit-1.0.8.jar` в `plugins`. Одновременно должен быть установлен только один плагин LazoDiscs. Конфиг — `plugins/LazoDiscs/config.yml`, доступ — через Bukkit-права.
+- **Spigot / Purpur / Folia и дополнительные версии Paper:** установи `lazodiscs-bukkit-<version>.jar` в `plugins`. Одновременно должен быть установлен только один плагин LazoDiscs. Конфиг — `plugins/LazoDiscs/config.yml`, доступ — через Bukkit-права.
 - **Voice 2:** игрокам нужен Plasmo Voice. Клиентский LazoDiscs необязателен и улучшает подсказки записанных пластинок.
 - **Voice 1:** игрокам нужен соответствующий клиентский LazoDiscs или отдельный модуль Voice 1 из инструкции. Выбирай поколение Voice по таблице. Музыка передаётся после подключения официальной голосовой сессии.
 - **Одиночная игра:** установи LazoDiscs и соответствующие зависимости в экземпляр Minecraft.
 
-[Полная таблица и инструкция](docs/compatibility-1.0.8.md) содержит ссылки на точные версии Voice для каждой платформы: **35 Fabric, 16 Forge, 17 NeoForge, 32 Paper, 35 Spigot, 30 Purpur и 13 Folia**. Приоритет у Voice 2. Voice 1 используется на старых версиях и Bukkit 1.16.5, где ограничение Java не позволяет запустить официальный плагин Voice 2.
+В [описании релиза](https://github.com/eyecrasher0/LazoDiscs/releases) есть ссылка на таблицу совместимости. По ней выбери официальную сборку Plasmo Voice и Java под свою версию Minecraft и платформу.
 
 У дополнения LazoBoombox другие требования: для него LazoBoombox, LazoDiscs и Plasmo Voice нужно установить и на сервер, и на клиенты игроков.
 
-### Поддерживаемые сборки
+### Совместимость
 
-LazoDiscs **1.0.8** охватывает совместимые версии Minecraft от 1.16.5 до 26.3, включая архивные стабильные Voice 2.0/2.1 и версии с Voice 1. В [полной таблице](docs/compatibility-1.0.8.md) каждый патч и платформа указаны отдельно. Для 1.7.10, 1.8.9 и 1.12.2 официального Plasmo Voice нет, поэтому они исключены.
-
-При отказе YouTube с требованием входа игрок получает короткое английское сообщение, а консоль — краткое предупреждение. Подробности остальных ошибок сохранены. Обновлённые зависимости сохраняют необходимую старым модам совместимость с Java 8/16.
+Используй Voice 2 там, где он указан в таблице. Для некоторых старых сборок нужен Voice 1. Если YouTube требует входа, попробуй другую ссылку.
 
 Подписанные ссылки сохраняются в пластинках полностью. Cookies доступа изолированы для каждой загрузки записи и не сохраняются в пластинке. При подборе Spotify название песни должно совпадать после удаления известных служебных пометок; другая песня с более длинным названием отклоняется.
 
 Экспериментальное воспроизведение на движущихся платформах Sable / Create Aeronautics включается в конфиге сервера и по умолчанию отключено. Для него нужна совместимая версия мода платформ.
 
-[Modrinth](https://modrinth.com/mod/lazodiscs) · [CurseForge](https://www.curseforge.com/minecraft/mc-mods/lazodiscs) · [Релизы GitHub](https://github.com/eyecrasher0/LazoDiscs/releases) · [Сообщить об ошибке](https://github.com/eyecrasher0/LazoDiscs/issues)
+[Modrinth](https://modrinth.com/mod/lazodiscs/versions) · [CurseForge Mods](https://www.curseforge.com/minecraft/mc-mods/lazodiscs/files) · [CurseForge Plugins](https://www.curseforge.com/minecraft/bukkit-plugins/lazodiscs/files) · [Релизы GitHub](https://github.com/eyecrasher0/LazoDiscs/releases) · [Сообщить об ошибке](https://github.com/eyecrasher0/LazoDiscs/issues)
